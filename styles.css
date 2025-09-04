@@ -172,12 +172,12 @@ h1, h2 {
     left: 50%;
     transform: translate(-50%, -50%) scale(0.9);
     opacity: 0;
-    background-color: rgba(0, 0, 0, 0.8);
+    background-color: rgba(23, 187, 160, 0.8);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
     border-radius: var(--border-radius);
     padding: 2rem;
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 20px rgba(10, 35, 173, 0.1);
     text-align: center;
     transition: all 0.3s ease-in-out;
     pointer-events: none;
