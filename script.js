@@ -157,10 +157,11 @@ class Game {
         this.gameStartTime = 0;
         this.currentObstacleGroup = 0;
         this.activeEffectsTimer = {};
+        this.foodSpawnTimer = 0;
 
         this.player = null;
         this.snake = null;
-        this.food = {};
+        this.food = [];
         this.powerups = [];
         this.obstacles = [];
         this.enemySnakes = [];
@@ -309,10 +310,12 @@ class Game {
         this.obstacles = [];
         this.enemySnakes = [];
         this.particles = [];
+        this.food = [];
         this.gameRunning = true;
         this.gamePaused = false;
         this.gameStartTime = Date.now();
         this.lastObstacleChange = Date.now();
+        this.foodSpawnTimer = Date.now();
         this.gameSpeed = this.difficultySettings[this.difficulty].speed;
         this.lastUpdateTime = Date.now();
         this.legendaryAchieved = false;
@@ -336,6 +339,12 @@ class Game {
         const currentTime = Date.now();
         const deltaTime = currentTime - this.lastUpdateTime;
         const currentSpeed = this.snake.effects.speed > 0 ? this.gameSpeed * 0.6 : this.gameSpeed;
+        const totalGameTime = 5 * 60 * 1000; // 5 minutos en milisegundos
+
+        if (currentTime - this.gameStartTime >= totalGameTime) {
+            this.gameOver(true); // Pasar un argumento para indicar que el juego terminó por tiempo
+            return;
+        }
 
         if (deltaTime > currentSpeed) {
             this.lastUpdateTime = currentTime;
@@ -350,6 +359,17 @@ class Game {
         this.updateEffects();
         this.updateTimer();
         this.checkObstacleChange();
+        
+        // Generar ratones cada 15 segundos
+        if (Date.now() - this.foodSpawnTimer >= 15000) {
+            const numMice = Math.floor(Math.random() * 2) + 2; // 2 o 3 ratones
+            for (let i = 0; i < numMice; i++) {
+                this.generateFood('mouse');
+            }
+            this.foodSpawnTimer = Date.now();
+            this.showAlert(`¡Han aparecido ${numMice} ratones!`, 3000);
+        }
+
         this.applyMagnetEffect();
 
         if (this.snake.effects.freeze <= 0) {
@@ -358,7 +378,7 @@ class Game {
 
         this.checkCollisions();
         
-        this.enemySnakes.forEach(enemy => enemy.update(this.food, this.obstacles, this.snake));
+        this.enemySnakes.forEach(enemy => enemy.update(this.food.length > 0 ? this.food[0] : null, this.obstacles, this.snake));
         this.updateParticles();
 
         if (Math.random() < this.difficultySettings[this.difficulty].powerupChance) this.generatePowerup();
@@ -439,16 +459,22 @@ class Game {
     
     checkCollisions() {
         const head = this.snake.body[0];
+        
+        // Colisión con límites del juego
         if (head.x < 0 || head.x >= this.canvasWidth || head.y < 0 || head.y >= this.canvasHeight) {
             this.collision();
             return;
         }
+
+        // Colisión con el propio cuerpo
         for (let i = 1; i < this.snake.body.length; i++) {
             if (head.x === this.snake.body[i].x && head.y === this.snake.body[i].y) {
                 this.collision();
                 return;
             }
         }
+        
+        // Colisión con obstáculos (si no hay escudo)
         if (this.snake.effects.shield === 0) {
             for (const obstacle of this.obstacles) {
                 if (head.x === obstacle.x && head.y === obstacle.y) {
@@ -458,6 +484,7 @@ class Game {
             }
         }
         
+        // Colisión con serpientes enemigas
         for (const enemy of this.enemySnakes) {
             if (head.x === enemy.body[0].x && head.y === enemy.body[0].y) {
                 this.collision();
@@ -465,12 +492,22 @@ class Game {
             }
         }
         
-        if (head.x === this.food.x && head.y === this.food.y) {
-            this.eatFood();
+        // Colisión con comida
+        let foodEatenIndex = -1;
+        for(let i = 0; i < this.food.length; i++) {
+            if (head.x === this.food[i].x && head.y === this.food[i].y) {
+                foodEatenIndex = i;
+                break;
+            }
+        }
+
+        if (foodEatenIndex !== -1) {
+            this.eatFood(foodEatenIndex);
         } else {
             this.snake.body.pop();
         }
 
+        // Colisión con powerups
         for (let i = this.powerups.length - 1; i >= 0; i--) {
             if (head.x === this.powerups[i].x && head.y === this.powerups[i].y) {
                 this.collectPowerup(this.powerups[i]);
@@ -479,22 +516,27 @@ class Game {
         }
     }
     
-    eatFood() {
-        this.player.score += this.food.points;
-        if (this.food.type === 'mouse') {
+    eatFood(foodIndex) {
+        const foodItem = this.food[foodIndex];
+        this.player.score += foodItem.points;
+        
+        if (foodItem.type === 'mouse') {
             this.player.miceEaten++;
             this.updateMiceCounter();
         }
-        if (this.food.heal && this.player.lives < 5) {
-            this.player.lives = Math.min(this.player.lives + this.food.heal, 5);
+        
+        if (foodItem.heal && this.player.lives < 5) {
+            this.player.lives = Math.min(this.player.lives + foodItem.heal, 5);
             this.updateHearts();
-            this.createParticles(this.food.x, this.food.y, '#00FF00');
+            this.createParticles(foodItem.x, foodItem.y, '#00FF00', 20);
         }
-        this.snake.grow(this.food.growth * this.difficultySettings[this.difficulty].growthRate);
+
+        this.snake.grow(foodItem.growth * this.difficultySettings[this.difficulty].growthRate);
         this.player.maxSnakeLength = Math.max(this.player.maxSnakeLength, this.snake.body.length);
         this.updateScore();
-        this.createParticles(this.food.x, this.food.y, this.food.color);
-        this.generateFood();
+        this.createParticles(foodItem.x, foodItem.y, foodItem.color, 15);
+        this.food.splice(foodIndex, 1);
+        
         if (this.player.score >= this.player.level * 120) {
             this.levelUp();
         }
@@ -504,13 +546,13 @@ class Game {
         if (this.snake.effects.shield > 0) {
             this.snake.effects.shield = 0;
             this.updateActiveEffects();
-            this.createParticles(this.snake.body[0].x, this.snake.body[0].y, '#4169E1');
+            this.createParticles(this.snake.body[0].x, this.snake.body[0].y, '#4169E1', 30);
             return;
         }
         this.player.lives--;
         this.player.perfectRun = false;
         this.updateHearts();
-        this.createParticles(this.snake.body[0].x, this.snake.body[0].y, '#FF0000');
+        this.createParticles(this.snake.body[0].x, this.snake.body[0].y, '#FF0000', 40);
         this.canvas.classList.add('collision-effect');
         setTimeout(() => this.canvas.classList.remove('collision-effect'), 500);
         if (this.player.lives <= 0) {
@@ -522,17 +564,22 @@ class Game {
         }
     }
 
-    gameOver() {
+    gameOver(byTime = false) {
         this.gameRunning = false;
-        if (this.player.score > this.highScore) {
-            this.highScore = this.player.score;
+        let finalScore = this.player.score;
+        if (byTime) {
+            finalScore += this.player.lives * 50; // Puntos extra por vidas restantes
+        }
+
+        if (finalScore > this.highScore) {
+            this.highScore = finalScore;
             this.saveHighScore();
             document.getElementById('newRecord').style.display = 'block';
             this.updateHighScoreDisplay();
         } else {
             document.getElementById('newRecord').style.display = 'none';
         }
-        document.getElementById('finalScore').textContent = `${this.player.name}, tu puntuación final fue: ${this.player.score} puntos`;
+        document.getElementById('finalScore').textContent = `${this.player.name}, tu puntuación final fue: ${finalScore} puntos`;
         this.showAchievements();
         document.getElementById('gameOver').classList.add('show');
     }
@@ -543,15 +590,15 @@ class Game {
         this.generateObstacles();
         this.player.score += 50;
         this.updateScore();
-        this.createParticles(this.canvasWidth/2, this.canvasHeight/2, '#FFD700');
+        this.createParticles(this.canvasWidth/2, this.canvasHeight/2, '#FFD700', 50);
         this.checkAchievements();
     }
     
-    generateFood() {
+    generateFood(type = null) {
         let newFood;
         do {
             const foodKeys = Object.keys(this.foodTypes);
-            const randomFoodType = foodKeys[Math.floor(Math.random() * foodKeys.length)];
+            const randomFoodType = type || foodKeys[Math.floor(Math.random() * foodKeys.length)];
             const foodData = this.foodTypes[randomFoodType];
             newFood = {
                 x: Math.floor(Math.random() * (canvasWidth / gridSize)) * gridSize,
@@ -560,7 +607,7 @@ class Game {
                 type: randomFoodType
             };
         } while (this.isPositionOccupied(newFood.x, newFood.y));
-        this.food = newFood;
+        this.food.push(newFood);
     }
 
     generatePowerup() {
@@ -605,7 +652,7 @@ class Game {
     }
     
     isPositionOccupied(x, y) {
-        if (x === this.food.x && y === this.food.y) return true;
+        if (this.food.some(f => f.x === x && f.y === y)) return true;
         if (this.snake.body.some(segment => segment.x === x && segment.y === y)) return true;
         if (this.powerups.some(p => p.x === x && p.y === y)) return true;
         if (this.obstacles.some(o => o.x === x && o.y === y)) return true;
@@ -649,9 +696,12 @@ class Game {
     }
 
     updateTimer() {
-        const elapsedSeconds = Math.floor((Date.now() - this.gameStartTime) / 1000);
-        const minutes = Math.floor(elapsedSeconds / 60);
-        const seconds = elapsedSeconds % 60;
+        const totalGameTime = 5 * 60 * 1000;
+        const elapsed = Date.now() - this.gameStartTime;
+        const remaining = totalGameTime - elapsed;
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        
         document.getElementById('gameTimer').textContent = `Tiempo: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     }
 
@@ -685,30 +735,36 @@ class Game {
         this.player.powerupsCollected++;
         this.snake.effects[powerup.type] = powerup.duration;
         this.updateActiveEffects();
-        this.createParticles(powerup.x, powerup.y, powerup.color);
+        this.createParticles(powerup.x, powerup.y, powerup.color, 25);
     }
     
     applyMagnetEffect() {
-        if (this.snake.effects.magnet > 0) {
-            const dx = this.food.x - this.snake.body[0].x;
-            const dy = this.food.y - this.snake.body[0].y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < 100) {
-                this.food.x += dx / 10;
-                this.food.y += dy / 10;
-            }
+        if (this.snake.effects.magnet > 0 && this.food.length > 0) {
+            const head = this.snake.body[0];
+            const foodToAttract = this.food.filter(f => {
+                const dx = f.x - head.x;
+                const dy = f.y - head.y;
+                return Math.sqrt(dx * dx + dy * dy) < 150;
+            });
+
+            foodToAttract.forEach(f => {
+                const dx = f.x - head.x;
+                const dy = f.y - head.y;
+                f.x -= dx * 0.05;
+                f.y -= dy * 0.05;
+            });
         }
     }
 
-    createParticles(x, y, color) {
-        for (let i = 0; i < 10; i++) {
+    createParticles(x, y, color, count = 10) {
+        for (let i = 0; i < count; i++) {
             this.particles.push({
                 x: x + gridSize / 2,
                 y: y + gridSize / 2,
                 color: color,
                 size: Math.random() * 5 + 2,
-                vx: (Math.random() - 0.5) * 5,
-                vy: (Math.random() - 0.5) * 5,
+                vx: (Math.random() - 0.5) * (Math.random() * 5 + 2),
+                vy: (Math.random() - 0.5) * (Math.random() * 5 + 2),
                 alpha: 1
             });
         }
@@ -745,8 +801,10 @@ class Game {
     }
 
     drawFood() {
-        this.ctx.font = `${gridSize}px Arial`;
-        this.ctx.fillText(this.food.emoji, this.food.x, this.food.y + gridSize);
+        this.food.forEach(f => {
+            this.ctx.font = `${gridSize}px Arial`;
+            this.ctx.fillText(f.emoji, f.x, f.y + gridSize);
+        });
     }
 
     drawPowerups() {
