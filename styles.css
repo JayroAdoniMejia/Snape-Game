@@ -1,7 +1,7 @@
 :root {
     --bg-color: #1a1a2e;
     --primary-color: #f44336;
-    --secondary-color: #2196F3;
+    --secondary-color: #1873bd;
     --text-color: #f0f0f0;
     --border-radius: 12px;
     --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -58,7 +58,7 @@ h1, h2 {
 }
 
 #gameCanvas {
-    background-color: #0f0f23;
+    background-color: #1f1f58;
     border: 2px solid var(--text-color);
     border-radius: var(--border-radius);
     margin-bottom: 1.5rem;
