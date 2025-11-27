@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snake JINX</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="game-container">
@@ -16,10 +16,10 @@
             <h1 class="text-3xl md:text-5xl font-bold mb-4">🐍 SNAKE JINX 🐍</h1>
             <p class="mb-4">Tu mejor puntuación: <span id="highScoreDisplay" class="font-bold text-xl">0</span></p>
 
-            <div class="setup-options">
+            <div class="setup-options w-full max-w-sm">
                 <div class="flex flex-col items-center">
                     <label for="playerName" class="mb-2">Nombre del Jugador:</label>
-                    <input type="text" id="playerName" class="name-input" placeholder="Tu nombre">
+                    <input type="text" id="playerName" class="name-input w-full" placeholder="Tu nombre">
                     <div id="nameAlert" class="text-red-400 mt-2 hidden">¡Por favor escribe tu nombre!</div>
                 </div>
 
@@ -28,33 +28,33 @@
                     <div class="snake-selection">
                         <div class="snake-option selected" data-snake="green">
                             <div class="snake-preview-container">
-                                <div class="snake-head-preview bg-green-500"></div>
-                                <div class="snake-body-preview bg-green-500"></div>
-                                <div class="snake-body-preview bg-green-500"></div>
+                                <div class="snake-head-preview" style="background-color: #48BB78;"></div>
+                                <div class="snake-body-preview" style="background-color: #48BB78;"></div>
+                                <div class="snake-body-preview" style="background-color: #48BB78;"></div>
                             </div>
                             <p>Verde</p>
                         </div>
                         <div class="snake-option" data-snake="blue">
                             <div class="snake-preview-container">
-                                <div class="snake-head-preview bg-blue-500"></div>
-                                <div class="snake-body-preview bg-blue-500"></div>
-                                <div class="snake-body-preview bg-blue-500"></div>
+                                <div class="snake-head-preview" style="background-color: #4C51BF;"></div>
+                                <div class="snake-body-preview" style="background-color: #4C51BF;"></div>
+                                <div class="snake-body-preview" style="background-color: #4C51BF;"></div>
                             </div>
                             <p>Azul</p>
                         </div>
                         <div class="snake-option" data-snake="red">
                             <div class="snake-preview-container">
-                                <div class="snake-head-preview bg-red-500"></div>
-                                <div class="snake-body-preview bg-red-500"></div>
-                                <div class="snake-body-preview bg-red-500"></div>
+                                <div class="snake-head-preview" style="background-color: #E53E3E;"></div>
+                                <div class="snake-body-preview" style="background-color: #E53E3E;"></div>
+                                <div class="snake-body-preview" style="background-color: #E53E3E;"></div>
                             </div>
                             <p>Roja</p>
                         </div>
                         <div class="snake-option" data-snake="purple">
                             <div class="snake-preview-container">
-                                <div class="snake-head-preview bg-purple-500"></div>
-                                <div class="snake-body-preview bg-purple-500"></div>
-                                <div class="snake-body-preview bg-purple-500"></div>
+                                <div class="snake-head-preview" style="background-color: #9F7AEA;"></div>
+                                <div class="snake-body-preview" style="background-color: #9F7AEA;"></div>
+                                <div class="snake-body-preview" style="background-color: #9F7AEA;"></div>
                             </div>
                             <p>Morada</p>
                         </div>
@@ -64,13 +64,13 @@
                 <div class="flex flex-col items-center">
                     <h3 class="text-xl mb-2">Selecciona la Dificultad</h3>
                     <div class="difficulty-selection">
-                        <button class="difficulty-btn active" data-diff="easy">Fácil</button>
-                        <button class="difficulty-btn" data-diff="normal">Normal</button>
-                        <button class="difficulty-btn" data-diff="hard">Difícil</button>
+                        <button class="difficulty-btn active" data-diff="150">Fácil</button>
+                        <button class="difficulty-btn" data-diff="100">Normal</button>
+                        <button class="difficulty-btn" data-diff="70">Difícil</button>
                     </div>
                 </div>
                 
-                <button id="startGameBtn" class="button primary-btn mt-4">Comenzar Juego</button>
+                <button id="startGameBtn" class="button primary-btn mt-4 w-full">Comenzar Juego</button>
             </div>
         </div>
 
@@ -80,42 +80,38 @@
                 <span class="info-item" id="playerInfo">Jugador:</span>
                 <span class="info-item" id="score">Puntuación: 0</span>
                 <span class="info-item" id="levelInfo">Nivel: 1</span>
-                <span class="info-item" id="miceCounter">Ratones: 0</span>
-                <span class="info-item" id="heartsContainer">❤️ ❤️ ❤️ ❤️ ❤️</span>
+                <span class="info-item" id="miceCounter">🐁: 0</span>
+                <span class="info-item" id="heartsContainer">❤️ ❤️ ❤️</span>
                 <span class="info-item" id="gameTimer">Tiempo: 0:00</span>
             </div>
-            <div class="info-panel justify-center">
-                <span class="info-item" id="activeEffects"></span>
-                <span class="info-item obstacle-timer" style="display: none;"></span>
-            </div>
-
-            <canvas id="gameCanvas" width="800" height="600"></canvas>
+            
+            <!-- Canvas modificado a 600x600 para un grid cuadrado más limpio -->
+            <canvas id="gameCanvas" width="600" height="600"></canvas>
             
             <div class="button-group">
-                <button id="pauseBtn" class="button secondary-btn">⏸️</button>
+                <button id="pauseBtn" class="button secondary-btn">⏸️ Pausa</button>
                 <button id="menuBtn" class="button secondary-btn">Menú Principal</button>
             </div>
             
             <!-- Controles Móviles -->
             <div id="mobileControls" class="mobile-controls">
-                <p class="text-center font-bold mb-4">Controles Móviles</p>
                 <div class="mobile-grid">
-                    <button id="upBtn" class="arrow-btn">▲</button>
-                    <button id="downBtn" class="arrow-btn">▼</button>
-                    <button id="leftBtn" class="arrow-btn">◀</button>
-                    <button id="rightBtn" class="arrow-btn">▶</button>
+                    <button id="upBtn" class="arrow-btn" data-dir="up">▲</button>
+                    <button id="downBtn" class="arrow-btn" data-dir="down">▼</button>
+                    <button id="leftBtn" class="arrow-btn" data-dir="left">◀</button>
+                    <button id="rightBtn" class="arrow-btn" data-dir="right">▶</button>
                 </div>
             </div>
         </div>
         
         <!-- Pantalla de Fin de Juego -->
-        <div id="gameOver" class="screen">
-            <h2 class="text-3xl font-bold mb-2">Fin del Juego</h2>
-            <p id="finalScore" class="text-xl mb-4"></p>
-            <p id="newRecord" class="text-yellow-400 font-bold hidden">¡Nuevo récord!</p>
+     <div id="gameOver" class="screen">
+            <h2 class="text-3xl font-bold mb-2 text-red-400">¡FIN DEL JUEGO!</h2>
+            <p id="finalScore" class="text-2xl mb-4"></p>
+            <p id="newRecord" class="text-yellow-400 font-bold text-xl hidden">¡NUEVO RÉCORD PERSONAL! 🏆</p>
             
-            <h3 class="text-2xl font-bold mt-4 mb-2">Logros Desbloqueados</h3>
-            <ul id="achievementList" class="list-none text-left w-full max-w-sm mx-auto"></ul>
+            <h3 class="text-xl font-bold mt-4 mb-2">Estadísticas Finales</h3>
+            <p id="finalStats"></p>
 
             <div class="button-group mt-6">
                 <button id="restartBtn" class="button primary-btn">Volver a Jugar</button>
@@ -124,7 +120,7 @@
         </div>
 
         <!-- Panel de Pausa -->
-        <div id="pausePanel" class="screen">
+        <div id="pausePanel" class="screen" style="display: none;">
             <h2 class="text-3xl font-bold mb-4">Juego en Pausa</h2>
             <div class="button-group">
                 <button id="resumeBtn" class="button primary-btn">▶️ Reanudar</button>
@@ -133,15 +129,13 @@
         </div>
 
         <!-- Pantalla de Logro Legendario -->
-        <div id="legendaryScreen" class="screen">
+        <div id="legendaryScreen" class="screen" style="display: none;">
             <h2 class="text-3xl font-bold mb-4">¡Logro Legendario! 🏆</h2>
             <p class="text-xl mb-4">¡Increíble, <span id="legendaryPlayerName"></span>!</p>
             <p>Has alcanzado un hito legendario en el juego. ¡Eres imparable!</p>
         </div>
-        
     </div>
 
     <script src="script.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
 </body>
 </html>

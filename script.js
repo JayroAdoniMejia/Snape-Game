@@ -1,933 +1,464 @@
-// Constantes globales para el juego
-const snakeColors = {
-    green: '#065a09ff',
-    blue: '#2196F3',
-    red: '#f44336',
-    purple: '#9C27B0'
+// --- CONSTANTES Y VARIABLES GLOBALES ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Dimensiones del juego
+const GRID_SIZE = 20; // 20x20 celdas
+const CELL_SIZE = canvas.width / GRID_SIZE; // 600px / 20 = 30px
+
+// Estado del juego
+let snake = [];
+let food = {}; // El "ratón"
+let dx = 0; // Dirección X
+let dy = 0; // Dirección Y
+let score = 0;
+let lives = 3;
+let level = 1;
+let miceEaten = 0;
+let gameLoopInterval = null;
+let gameSpeedMs = 150; // Velocidad por defecto (Fácil)
+let isPaused = false;
+let playerName = "Jugador 1";
+let snakeColor = '#48BB78'; // Color por defecto (Verde)
+let timeElapsed = 0;
+let timerInterval = null;
+let lastDirection = 'right';
+let growSnake = false; // Nueva variable para controlar el crecimiento
+
+// Mapeo de colores
+const COLOR_MAP = {
+    green: '#48BB78',
+    blue: '#4C51BF',
+    red: '#E53E3E',
+    purple: '#9F7AEA'
 };
-const gridSize = 20;
-const canvasWidth = 800;
-const canvasHeight = 600;
 
-// Clases del juego
-class Player {
-    constructor(name) {
-        this.name = name;
-        this.score = 0;
-        this.level = 1;
-        this.lives = 5;
-        this.miceEaten = 0;
-        this.powerupsCollected = 0;
-        this.perfectRun = true;
-        this.maxSnakeLength = 1;
-        this.achievements = [];
-    }
+// --- MANEJO DE LA INTERFAZ Y PANTALLAS ---
+const $ = (id) => document.getElementById(id);
 
-    addScore(points) {
-        this.score += points;
-    }
+const setupScreen = $('setupScreen');
+const gameScreen = $('gameScreen');
+const gameOverScreen = $('gameOver');
+const pausePanel = $('pausePanel');
+const nameAlert = $('nameAlert');
+const highScoreDisplay = $('highScoreDisplay');
 
-    loseLife() {
-        this.lives--;
-        this.perfectRun = false;
-    }
-
-    checkAchievements() {
-        const achieved = [];
-        if (this.score >= 500 && !this.achievements.includes('score500')) {
-            this.achievements.push('score500');
-            achieved.push({ name: '¡Gran Puntuación!', description: 'Alcanza 500 puntos.', icon: '🏆' });
-        }
-        if (this.lives === 5 && this.perfectRun && !this.achievements.includes('perfectRun')) {
-            this.achievements.push('perfectRun');
-            achieved.push({ name: 'Corredor Perfecto', description: 'Termina un nivel con 5 vidas.', icon: '✨' });
-        }
-        return achieved;
+// Función para cambiar de pantalla
+function switchScreen(activeScreen) {
+    const screens = [setupScreen, gameScreen, gameOverScreen, pausePanel];
+    screens.forEach(screen => {
+        screen.style.display = 'none';
+        screen.classList.remove('active');
+    });
+    activeScreen.style.display = 'flex';
+    if (activeScreen === setupScreen) {
+        activeScreen.classList.add('active'); // Para mantener el flujo de layout original
     }
 }
 
-class Snake {
-    constructor(type, isPlayer = true) {
-        this.body = [{ x: 100, y: 100 }];
-        this.direction = 'right';
-        this.nextDirection = 'right';
-        this.color = snakeColors[type];
-        this.type = type;
-        this.isPlayer = isPlayer;
-        this.effects = { speed: 0, shield: 0, magnet: 0, freeze: 0 };
-    }
-
-    move() {
-        if (this.isPlayer) {
-            this.direction = this.nextDirection;
-        }
-
-        const head = { x: this.body[0].x, y: this.body[0].y };
-        switch (this.direction) {
-            case 'up': head.y -= gridSize; break;
-            case 'down': head.y += gridSize; break;
-            case 'left': head.x -= gridSize; break;
-            case 'right': head.x += gridSize; break;
-        }
-        this.body.unshift(head);
-    }
-    
-    changeDirection(newDirection) {
-        const opposites = { up: 'down', down: 'up', left: 'right', right: 'left' };
-        if (this.isPlayer && this.direction !== opposites[newDirection]) {
-            this.nextDirection = newDirection;
-        }
-    }
-
-    grow(amount) {
-        for (let i = 0; i < amount; i++) {
-            const tail = this.body[this.body.length - 1];
-            this.body.push({ x: tail.x, y: tail.y });
-        }
-    }
-}
-
-class EnemySnake extends Snake {
-    constructor(type) {
-        super(type.color, false);
-        this.body = [{ x: Math.floor(Math.random() * (canvasWidth / gridSize)) * gridSize, y: Math.floor(Math.random() * (canvasHeight / gridSize)) * gridSize }];
-        this.speed = type.speed;
-        this.emoji = type.emoji;
-        this.moveTimer = 0;
-        this.size = type.size;
-    }
-    
-    update(foodPosition, obstacles, playerSnake) {
-        this.moveTimer += 1;
-        
-        if (this.moveTimer >= 60 / this.speed) {
-            this.moveTimer = 0;
-            
-            let targetX = this.body[0].x;
-            let targetY = this.body[0].y;
-            
-            const dx = foodPosition.x - this.body[0].x;
-            const dy = foodPosition.y - this.body[0].y;
-            
-            if (Math.abs(dx) > Math.abs(dy)) {
-                targetX += (dx > 0) ? gridSize : -gridSize;
-            } else {
-                targetY += (dy > 0) ? gridSize : -gridSize;
-            }
-            
-            if (this.willCollide(targetX, targetY, obstacles, playerSnake)) {
-                const directions = [{x: gridSize, y: 0}, {x: -gridSize, y: 0}, {x: 0, y: gridSize}, {x: 0, y: -gridSize}];
-                const randomDir = directions[Math.floor(Math.random() * directions.length)];
-                targetX = this.body[0].x + randomDir.x;
-                targetY = this.body[0].y + randomDir.y;
-            }
-
-            this.body.unshift({ x: targetX, y: targetY });
-            this.body.pop();
-        }
-    }
-    
-    willCollide(x, y, obstacles, playerSnake) {
-        if (x < 0 || x >= canvasWidth || y < 0 || y >= canvasHeight) {
-            return true;
-        }
-        for (const obs of obstacles) {
-            if (x === obs.x && y === obs.y) return true;
-        }
-        for (const seg of playerSnake.body) {
-            if (x === seg.x && y === seg.y) return true;
-        }
-        return false;
-    }
-}
-
-class Game {
-    constructor() {
-        this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.playerName = '';
-        this.difficulty = '';
-        this.selectedSnakeType = 'green';
-        this.gameRunning = false;
-        this.gamePaused = false;
-        this.lastUpdateTime = 0;
-        this.gameSpeed = 200;
-        this.highScore = 0;
-        this.lastObstacleChange = 0;
-        this.gameStartTime = 0;
-        this.currentObstacleGroup = 0;
-        this.activeEffectsTimer = {};
-        this.foodSpawnTimer = 0;
-
-        this.player = null;
-        this.snake = null;
-        this.food = [];
-        this.powerups = [];
-        this.obstacles = [];
-        this.enemySnakes = [];
-        this.particles = [];
-        this.foodEaten = false;
-
-        this.difficultySettings = {
-            easy: { speed: 200, obstacleCount: 3, powerupChance: 0.3, growthRate: 1, enemyCount: 1 },
-            normal: { speed: 150, obstacleCount: 5, powerupChance: 0.2, growthRate: 2, enemyCount: 2 },
-            hard: { speed: 100, obstacleCount: 7, powerupChance: 0.1, growthRate: 3, enemyCount: 3 }
-        };
-        this.foodTypes = {
-            mouse: { emoji: '🐭', points: 10, color: '#FFB6C1', growth: 1 },
-            cheese: { emoji: '🧀', points: 25, color: '#FFD700', growth: 2 },
-            apple: { emoji: '🍎', points: 5, color: '#FF4444', growth: 1, heal: 1 },
-            diamond: { emoji: '💎', points: 50, color: '#00FFFF', growth: 3 }
-        };
-        this.powerupTypes = {
-            speed: { emoji: '⚡', color: '#FFFF00', duration: 10000 },
-            shield: { emoji: '🛡️', color: '#4169E1', duration: 15000 },
-            magnet: { emoji: '🧲', color: '#FF69B4', duration: 8000 },
-            freeze: { emoji: '❄️', color: '#00BFFF', duration: 5000 }
-        };
-        this.obstacleGroups = [
-            [{ emoji: '🪨', color: '#8B4513', type: 'rock' }, { emoji: '🗿', color: '#696969', type: 'stone' }],
-            [{ emoji: '🌳', color: '#228B22', type: 'tree' }, { emoji: '🌿', color: '#006400', type: 'bush' }],
-            [{ emoji: '🏔️', color: '#A0522D', type: 'mountain' }, { emoji: '🌵', color: '#228B22', type: 'cactus' }],
-            [{ emoji: '🏛️', color: '#DAA520', type: 'ruins' }, { emoji: '⚡', color: '#FFD700', type: 'lightning' }],
-            [{ emoji: '🕳️', color: '#2F4F4F', type: 'hole' }, { emoji: '🔥', color: '#FF4500', type: 'fire' }]
-        ]; 
-        this.enemySnakeTypes = [
-            { color: '#8B0000', emoji: '🐍', speed: 0.3, size: 3 },
-            { color: '#4B0082', emoji: '🐍', speed: 0.4, size: 2 },
-            { color: '#FF6347', emoji: '🐍', speed: 0.5, size: 4 }
-        ];
-
-        this.canvasWidth = canvasWidth;
-        this.canvasHeight = canvasHeight;
-    }
-
-    init() {
-        this.loadHighScore();
-        this.updateHighScoreDisplay();
-        this.selectSnake('green');
-        this.selectDifficulty('easy');
-        this.setupEventListeners();
-        this.setupMobileControls();
-        if (this.isMobile()) {
-            document.getElementById('mobileControls').style.display = 'block';
-        }
-    }
-    
-    setupEventListeners() {
-        document.querySelectorAll('.snake-option').forEach(option => {
-            option.addEventListener('click', (e) => this.selectSnake(e.currentTarget.dataset.snake));
-        });
-        document.querySelectorAll('.difficulty-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this.selectDifficulty(e.currentTarget.dataset.diff));
-        });
-        document.getElementById('startGameBtn').addEventListener('click', () => this.startGame());
-        document.getElementById('restartBtn').addEventListener('click', () => this.restartGame());
-        document.getElementById('backToSetupBtn').addEventListener('click', () => this.backToSetup());
-        document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
-        document.getElementById('resumeBtn').addEventListener('click', () => this.togglePause());
-        document.getElementById('menuBtn').addEventListener('click', () => this.backToSetup());
-        document.getElementById('menuFromPauseBtn').addEventListener('click', () => {
-            document.getElementById('pausePanel').classList.remove('show');
-            this.backToSetup();
-        });
-        document.addEventListener('keydown', (e) => this.handleKeyPress(e));
-        window.addEventListener('resize', this.resizeCanvas.bind(this));
-        this.resizeCanvas();
-    }
-
-    resizeCanvas() {
-        const gameArea = document.querySelector('.game-container');
-        const aspectRatio = this.canvasWidth / this.canvasHeight;
-        let newWidth = gameArea.offsetWidth;
-        let newHeight = newWidth / aspectRatio;
-        
-        if (newHeight > window.innerHeight - 200) {
-            newHeight = window.innerHeight - 200;
-            newWidth = newHeight * aspectRatio;
-        }
-        
-        this.canvas.style.width = newWidth + 'px';
-        this.canvas.style.height = newHeight + 'px';
-    }
-
-    selectSnake(type) {
-        this.selectedSnakeType = type;
-        document.querySelectorAll('.snake-option').forEach(option => {
-            option.classList.remove('selected');
-        });
-        document.querySelector(`[data-snake="${type}"]`).classList.add('selected');
-        if (this.snake) {
-            this.snake.color = snakeColors[type];
-            this.snake.type = type;
-        }
-    }
-    
-    selectDifficulty(diff) {
-        this.difficulty = diff;
-        document.querySelectorAll('.difficulty-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        document.querySelector(`[data-diff="${diff}"]`).classList.add('active');
-    }
-
-    startGame() {
-        this.playerName = document.getElementById('playerName').value.trim();
-        if (!this.playerName) {
-            document.getElementById('nameAlert').classList.remove('hidden');
-            return;
-        }
-        document.getElementById('nameAlert').classList.add('hidden');
-        
-        document.getElementById('setupScreen').classList.remove('active');
-        document.getElementById('gameScreen').classList.add('active');
-        document.getElementById('playerInfo').textContent = `Jugador: ${this.playerName}`;
-        
-        this.resetGame();
-        this.gameLoop();
-    }
-    
-    restartGame() {
-        document.getElementById('gameOver').classList.remove('show');
-        this.resetGame();
-        this.gameLoop();
-    }
-
-    backToSetup() {
-        document.getElementById('gameOver').classList.remove('show');
-        document.getElementById('gameScreen').classList.remove('active');
-        document.getElementById('setupScreen').classList.add('active');
-        this.gameRunning = false;
-    }
-    
-    resetGame() {
-        this.player = new Player(this.playerName);
-        this.snake = new Snake(this.selectedSnakeType);
-        this.snake.body = [{ x: 100, y: 100 }];
-        this.snake.direction = 'right';
-        this.snake.nextDirection = 'right';
-        this.powerups = [];
-        this.obstacles = [];
-        this.enemySnakes = [];
-        this.particles = [];
-        this.food = [];
-        this.gameRunning = true;
-        this.gamePaused = false;
-        this.gameStartTime = Date.now();
-        this.lastObstacleChange = Date.now();
-        this.foodSpawnTimer = Date.now();
-        this.gameSpeed = this.difficultySettings[this.difficulty].speed;
-        this.lastUpdateTime = Date.now();
-        this.legendaryAchieved = false;
-
-        this.updateScore();
-        this.updateLevel();
-        this.updateHearts();
-        this.updateMiceCounter();
-        this.updateActiveEffects();
-
-        this.generateFood();
-        this.generateObstacles();
-        this.generateEnemySnakes();
-        this.createNatureBackground();
-        document.getElementById('gameOver').classList.remove('show');
-    }
-
-    gameLoop(timestamp) {
-        if (!this.gameRunning || this.gamePaused) return;
-
-        const currentTime = Date.now();
-        const deltaTime = currentTime - this.lastUpdateTime;
-        const currentSpeed = this.snake.effects.speed > 0 ? this.gameSpeed * 0.6 : this.gameSpeed;
-        const totalGameTime = 5 * 60 * 1000; // 5 minutos en milisegundos
-
-        if (currentTime - this.gameStartTime >= totalGameTime) {
-            this.gameOver(true); // Pasar un argumento para indicar que el juego terminó por tiempo
-            return;
-        }
-
-        if (deltaTime > currentSpeed) {
-            this.lastUpdateTime = currentTime;
-            this.update();
-            this.draw();
-        }
-
-        requestAnimationFrame(this.gameLoop.bind(this));
-    }
-
-    update() {
-        this.updateEffects();
-        this.updateTimer();
-        this.checkObstacleChange();
-        
-        // Generar ratones cada 15 segundos
-        if (Date.now() - this.foodSpawnTimer >= 15000) {
-            const numMice = Math.floor(Math.random() * 2) + 2; // 2 o 3 ratones
-            for (let i = 0; i < numMice; i++) {
-                this.generateFood('mouse');
-            }
-            this.foodSpawnTimer = Date.now();
-            this.showAlert(`¡Han aparecido ${numMice} ratones!`, 3000);
-        }
-
-        this.applyMagnetEffect();
-
-        if (this.snake.effects.freeze <= 0) {
-            this.snake.move();
-        }
-
-        this.checkCollisions();
-        
-        this.enemySnakes.forEach(enemy => enemy.update(this.food.length > 0 ? this.food[0] : null, this.obstacles, this.snake));
-        this.updateParticles();
-
-        if (Math.random() < this.difficultySettings[this.difficulty].powerupChance) this.generatePowerup();
-        this.checkLegendaryAchievement();
-    }
-    
-    draw() {
-        const gradient = this.ctx.createLinearGradient(0, 0, this.canvasWidth, this.canvasHeight);
-        gradient.addColorStop(0, '#1a1a2e');
-        gradient.addColorStop(0.5, '#16213e');
-        gradient.addColorStop(1, '#0f0f23');
-        this.ctx.fillStyle = gradient;
-        this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
-
-        this.drawSnake();
-        this.drawFood();
-        this.drawPowerups();
-        this.drawObstacles();
-        this.drawEnemySnakes();
-        this.drawParticles();
-    }
-    
-    isMobile() {
-        return /Android|webOS|iPhone|iPad|iPod|Black-Berry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    }
-    
-    setupMobileControls() {
-        document.getElementById('upBtn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.snake.changeDirection('up');
-        });
-        document.getElementById('downBtn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.snake.changeDirection('down');
-        });
-        document.getElementById('leftBtn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.snake.changeDirection('left');
-        });
-        document.getElementById('rightBtn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.snake.changeDirection('right');
-        });
-    }
-
-    handleKeyPress(e) {
-        if (!this.gameRunning) return;
-        
-        switch(e.key) {
-            case 'ArrowUp': this.snake.changeDirection('up'); break;
-            case 'ArrowDown': this.snake.changeDirection('down'); break;
-            case 'ArrowLeft': this.snake.changeDirection('left'); break;
-            case 'ArrowRight': this.snake.changeDirection('right'); break;
-            case ' ':
-            case 'Escape':
-                this.togglePause();
-                break;
-        }
-        e.preventDefault();
-    }
-
-    togglePause() {
-        if (!this.gameRunning) return;
-        
-        this.gamePaused = !this.gamePaused;
-        const pausePanel = document.getElementById('pausePanel');
-        const pauseBtn = document.getElementById('pauseBtn');
-        
-        if (this.gamePaused) {
-            pausePanel.classList.add('show');
-            pauseBtn.textContent = '▶️';
-        } else {
-            pausePanel.classList.remove('show');
-            pauseBtn.textContent = '⏸️';
-            this.gameLoop();
-        }
-    }
-    
-    checkCollisions() {
-        const head = this.snake.body[0];
-        
-        // Colisión con límites del juego
-        if (head.x < 0 || head.x >= this.canvasWidth || head.y < 0 || head.y >= this.canvasHeight) {
-            this.collision();
-            return;
-        }
-
-        // Colisión con el propio cuerpo
-        for (let i = 1; i < this.snake.body.length; i++) {
-            if (head.x === this.snake.body[i].x && head.y === this.snake.body[i].y) {
-                this.collision();
-                return;
-            }
-        }
-        
-        // Colisión con obstáculos (si no hay escudo)
-        if (this.snake.effects.shield === 0) {
-            for (const obstacle of this.obstacles) {
-                if (head.x === obstacle.x && head.y === obstacle.y) {
-                    this.collision();
-                    return;
-                }
-            }
-        }
-        
-        // Colisión con serpientes enemigas
-        for (const enemy of this.enemySnakes) {
-            if (head.x === enemy.body[0].x && head.y === enemy.body[0].y) {
-                this.collision();
-                return;
-            }
-        }
-        
-        // Colisión con comida
-        let foodEatenIndex = -1;
-        for(let i = 0; i < this.food.length; i++) {
-            if (head.x === this.food[i].x && head.y === this.food[i].y) {
-                foodEatenIndex = i;
-                break;
-            }
-        }
-
-        if (foodEatenIndex !== -1) {
-            this.eatFood(foodEatenIndex);
-        } else {
-            this.snake.body.pop();
-        }
-
-        // Colisión con powerups
-        for (let i = this.powerups.length - 1; i >= 0; i--) {
-            if (head.x === this.powerups[i].x && head.y === this.powerups[i].y) {
-                this.collectPowerup(this.powerups[i]);
-                this.powerups.splice(i, 1);
-            }
-        }
-    }
-    
-    eatFood(foodIndex) {
-        const foodItem = this.food[foodIndex];
-        this.player.score += foodItem.points;
-        
-        if (foodItem.type === 'mouse') {
-            this.player.miceEaten++;
-            this.updateMiceCounter();
-        }
-        
-        if (foodItem.heal && this.player.lives < 5) {
-            this.player.lives = Math.min(this.player.lives + foodItem.heal, 5);
-            this.updateHearts();
-            this.createParticles(foodItem.x, foodItem.y, '#00FF00', 20);
-        }
-
-        this.snake.grow(foodItem.growth * this.difficultySettings[this.difficulty].growthRate);
-        this.player.maxSnakeLength = Math.max(this.player.maxSnakeLength, this.snake.body.length);
-        this.updateScore();
-        this.createParticles(foodItem.x, foodItem.y, foodItem.color, 15);
-        this.food.splice(foodIndex, 1);
-        
-        if (this.player.score >= this.player.level * 120) {
-            this.levelUp();
-        }
-    }
-    
-    collision() {
-        if (this.snake.effects.shield > 0) {
-            this.snake.effects.shield = 0;
-            this.updateActiveEffects();
-            this.createParticles(this.snake.body[0].x, this.snake.body[0].y, '#4169E1', 30);
-            return;
-        }
-        this.player.lives--;
-        this.player.perfectRun = false;
-        this.updateHearts();
-        this.createParticles(this.snake.body[0].x, this.snake.body[0].y, '#FF0000', 40);
-        this.canvas.classList.add('collision-effect');
-        setTimeout(() => this.canvas.classList.remove('collision-effect'), 500);
-        if (this.player.lives <= 0) {
-            this.gameOver();
-        } else {
-            this.snake.body = [{ x: 100, y: 100 }];
-            this.snake.direction = 'right';
-            this.snake.nextDirection = 'right';
-        }
-    }
-
-    gameOver(byTime = false) {
-        this.gameRunning = false;
-        let finalScore = this.player.score;
-        if (byTime) {
-            finalScore += this.player.lives * 50; // Puntos extra por vidas restantes
-        }
-
-        if (finalScore > this.highScore) {
-            this.highScore = finalScore;
-            this.saveHighScore();
-            document.getElementById('newRecord').style.display = 'block';
-            this.updateHighScoreDisplay();
-        } else {
-            document.getElementById('newRecord').style.display = 'none';
-        }
-        document.getElementById('finalScore').textContent = `${this.player.name}, tu puntuación final fue: ${finalScore} puntos`;
-        this.showAchievements();
-        document.getElementById('gameOver').classList.add('show');
-    }
-
-    levelUp() {
-        this.player.level++;
-        this.updateLevel();
-        this.generateObstacles();
-        this.player.score += 50;
-        this.updateScore();
-        this.createParticles(this.canvasWidth/2, this.canvasHeight/2, '#FFD700', 50);
-        this.checkAchievements();
-    }
-    
-    generateFood(type = null) {
-        let newFood;
-        do {
-            const foodKeys = Object.keys(this.foodTypes);
-            const randomFoodType = type || foodKeys[Math.floor(Math.random() * foodKeys.length)];
-            const foodData = this.foodTypes[randomFoodType];
-            newFood = {
-                x: Math.floor(Math.random() * (canvasWidth / gridSize)) * gridSize,
-                y: Math.floor(Math.random() * (canvasHeight / gridSize)) * gridSize,
-                ...foodData,
-                type: randomFoodType
-            };
-        } while (this.isPositionOccupied(newFood.x, newFood.y));
-        this.food.push(newFood);
-    }
-
-    generatePowerup() {
-        let newPowerup;
-        do {
-            const powerupKeys = Object.keys(this.powerupTypes);
-            const randomPowerupType = powerupKeys[Math.floor(Math.random() * powerupKeys.length)];
-            const powerupData = this.powerupTypes[randomPowerupType];
-            newPowerup = {
-                x: Math.floor(Math.random() * (canvasWidth / gridSize)) * gridSize,
-                y: Math.floor(Math.random() * (canvasHeight / gridSize)) * gridSize,
-                ...powerupData,
-                type: randomPowerupType
-            };
-        } while (this.isPositionOccupied(newPowerup.x, newPowerup.y));
-        this.powerups.push(newPowerup);
-    }
-
-    generateObstacles() {
-        this.obstacles = [];
-        const currentObstacleEmojis = this.obstacleGroups[this.currentObstacleGroup];
-        for (let i = 0; i < this.difficultySettings[this.difficulty].obstacleCount; i++) {
-            let newObstacle;
-            do {
-                const randomObstacleType = currentObstacleEmojis[Math.floor(Math.random() * currentObstacleEmojis.length)];
-                newObstacle = {
-                    x: Math.floor(Math.random() * (canvasWidth / gridSize)) * gridSize,
-                    y: Math.floor(Math.random() * (canvasHeight / gridSize)) * gridSize,
-                    ...randomObstacleType
-                };
-            } while (this.isPositionOccupied(newObstacle.x, newObstacle.y));
-            this.obstacles.push(newObstacle);
-        }
-    }
-
-    generateEnemySnakes() {
-        this.enemySnakes = [];
-        for (let i = 0; i < this.difficultySettings[this.difficulty].enemyCount; i++) {
-            const randomType = this.enemySnakeTypes[Math.floor(Math.random() * this.enemySnakeTypes.length)];
-            this.enemySnakes.push(new EnemySnake(randomType));
-        }
-    }
-    
-    isPositionOccupied(x, y) {
-        if (this.food.some(f => f.x === x && f.y === y)) return true;
-        if (this.snake.body.some(segment => segment.x === x && segment.y === y)) return true;
-        if (this.powerups.some(p => p.x === x && p.y === y)) return true;
-        if (this.obstacles.some(o => o.x === x && o.y === y)) return true;
-        return false;
-    }
-    
-    checkObstacleChange() {
-        const timeElapsed = Date.now() - this.lastObstacleChange;
-        const obstacleTimerDiv = document.querySelector('.obstacle-timer');
-
-        if (timeElapsed >= 25000 && timeElapsed < 30000) {
-            const timeRemaining = Math.ceil((30000 - timeElapsed) / 1000);
-            obstacleTimerDiv.style.display = 'block';
-            this.showObstacleTimer(timeRemaining);
-        } else if (timeElapsed >= 30000) {
-            obstacleTimerDiv.style.display = 'none';
-            this.currentObstacleGroup = (this.currentObstacleGroup + 1) % this.obstacleGroups.length;
-            this.changeObstacles();
-            this.lastObstacleChange = Date.now();
-            this.showAlert('¡El entorno ha cambiado!', 3000);
-        } else {
-            obstacleTimerDiv.style.display = 'none';
-        }
-    }
-    
-    changeObstacles() {
-        this.obstacles = [];
-        this.generateObstacles();
-    }
-    
-    showAlert(message, duration = 2000) {
-        const alertDiv = document.createElement('div');
-        alertDiv.textContent = message;
-        alertDiv.classList.add('obstacle-change-alert');
-        document.body.appendChild(alertDiv);
-        setTimeout(() => alertDiv.remove(), duration);
-    }
-
-    showObstacleTimer(time) {
-        document.querySelector('.obstacle-timer').textContent = `Cambio de entorno en: ${time}s`;
-    }
-
-    updateTimer() {
-        const totalGameTime = 5 * 60 * 1000;
-        const elapsed = Date.now() - this.gameStartTime;
-        const remaining = totalGameTime - elapsed;
-        const minutes = Math.floor(remaining / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-        
-        document.getElementById('gameTimer').textContent = `Tiempo: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-    }
-
-    checkLegendaryAchievement() {
-        if (this.player.maxSnakeLength >= 20 && this.player.score >= 500 && this.player.lives >= 3 && !this.legendaryAchieved) {
-            this.legendaryAchieved = true;
-            this.showLegendaryScreen();
-        }
-    }
-
-    showLegendaryScreen() {
-        document.getElementById('legendaryPlayerName').textContent = this.player.name;
-        document.getElementById('legendaryScreen').classList.add('show');
-        this.gamePaused = true;
-        setTimeout(() => {
-            document.getElementById('legendaryScreen').classList.remove('show');
-            this.gamePaused = false;
-        }, 5000);
-    }
-
-    updateEffects() {
-        for (const effect in this.snake.effects) {
-            if (this.snake.effects[effect] > 0) {
-                this.snake.effects[effect] = Math.max(0, this.snake.effects[effect] - (Date.now() - this.lastUpdateTime));
-            }
-        }
-        this.updateActiveEffects();
-    }
-
-    collectPowerup(powerup) {
-        this.player.powerupsCollected++;
-        this.snake.effects[powerup.type] = powerup.duration;
-        this.updateActiveEffects();
-        this.createParticles(powerup.x, powerup.y, powerup.color, 25);
-    }
-    
-    applyMagnetEffect() {
-        if (this.snake.effects.magnet > 0 && this.food.length > 0) {
-            const head = this.snake.body[0];
-            const foodToAttract = this.food.filter(f => {
-                const dx = f.x - head.x;
-                const dy = f.y - head.y;
-                return Math.sqrt(dx * dx + dy * dy) < 150;
-            });
-
-            foodToAttract.forEach(f => {
-                const dx = f.x - head.x;
-                const dy = f.y - head.y;
-                f.x -= dx * 0.05;
-                f.y -= dy * 0.05;
-            });
-        }
-    }
-
-    createParticles(x, y, color, count = 10) {
-        for (let i = 0; i < count; i++) {
-            this.particles.push({
-                x: x + gridSize / 2,
-                y: y + gridSize / 2,
-                color: color,
-                size: Math.random() * 5 + 2,
-                vx: (Math.random() - 0.5) * (Math.random() * 5 + 2),
-                vy: (Math.random() - 0.5) * (Math.random() * 5 + 2),
-                alpha: 1
-            });
-        }
-    }
-
-    updateParticles() {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            p.x += p.vx;
-            p.y += p.vy;
-            p.alpha -= 0.02;
-            if (p.alpha <= 0) {
-                this.particles.splice(i, 1);
-            }
-        }
-    }
-    
-    drawSnake() {
-        this.snake.body.forEach((segment, index) => {
-            if (index === 0) {
-                this.ctx.fillStyle = this.snake.color;
-                this.ctx.fillRect(segment.x, segment.y, gridSize, gridSize);
-                
-                if (this.snake.effects.shield > 0) {
-                    this.ctx.strokeStyle = 'rgba(65, 105, 225, 0.8)';
-                    this.ctx.lineWidth = 3;
-                    this.ctx.strokeRect(segment.x, segment.y, gridSize, gridSize);
-                }
-            } else {
-                this.ctx.fillStyle = this.darkenColor(this.snake.color, 0.1);
-                this.ctx.fillRect(segment.x, segment.y, gridSize, gridSize);
-            }
-        });
-    }
-
-    drawFood() {
-        this.food.forEach(f => {
-            this.ctx.font = `${gridSize}px Arial`;
-            this.ctx.fillText(f.emoji, f.x, f.y + gridSize);
-        });
-    }
-
-    drawPowerups() {
-        this.powerups.forEach(p => {
-            this.ctx.font = `${gridSize}px Arial`;
-            this.ctx.fillText(p.emoji, p.x, p.y + gridSize);
-        });
-    }
-
-    drawObstacles() {
-        this.obstacles.forEach(o => {
-            this.ctx.font = `${gridSize}px Arial`;
-            this.ctx.fillText(o.emoji, o.x, o.y + gridSize);
-        });
-    }
-    
-    drawEnemySnakes() {
-        this.enemySnakes.forEach(enemy => {
-            this.ctx.font = `${enemy.size * 5}px Arial`;
-            this.ctx.fillText(enemy.emoji, enemy.body[0].x, enemy.body[0].y + enemy.size * 5);
-        });
-    }
-    
-    drawParticles() {
-        this.particles.forEach(p => {
-            this.ctx.beginPath();
-            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            this.ctx.fillStyle = `rgba(${parseInt(p.color.slice(1, 3), 16)}, ${parseInt(p.color.slice(3, 5), 16)}, ${parseInt(p.color.slice(5, 7), 16)}, ${p.alpha})`;
-            this.ctx.fill();
-        });
-    }
-
-    darkenColor(hex, lum) {
-        hex = String(hex).replace(/[^0-9a-f]/gi, '');
-        if (hex.length < 6) {
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        lum = lum || 0;
-        let rgb = "#", c, i;
-        for (i = 0; i < 3; i++) {
-            c = parseInt(hex.substr(i * 2, 2), 16);
-            c = Math.round(Math.min(Math.max(0, c - (c * lum)), 255)).toString(16);
-            rgb += ("00" + c).substr(c.length);
-        }
-        return rgb;
-    }
-
-    lightenColor(hex, lum) {
-        hex = String(hex).replace(/[^0-9a-f]/gi, '');
-        if (hex.length < 6) {
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        lum = lum || 0;
-        let rgb = "#", c, i;
-        for (i = 0; i < 3; i++) {
-            c = parseInt(hex.substr(i * 2, 2), 16);
-            c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
-            rgb += ("00" + c).substr(c.length);
-        }
-        return rgb;
-    }
-    
-    updateScore() { document.getElementById('score').textContent = `Puntuación: ${this.player.score}`; }
-    updateLevel() { document.getElementById('levelInfo').textContent = `Nivel: ${this.player.level}`; }
-    updateHearts() {
-        const heartsContainer = document.getElementById('heartsContainer');
-        heartsContainer.innerHTML = '';
-        for (let i = 0; i < this.player.lives; i++) {
-            heartsContainer.innerHTML += '<span class="heart">❤️</span>';
-        }
-    }
-    updateMiceCounter() { document.getElementById('miceCounter').textContent = `Ratones: ${this.player.miceEaten}`; }
-    updateActiveEffects() {
-        const effectsDiv = document.getElementById('activeEffects');
-        effectsDiv.innerHTML = '';
-        for (const effect in this.snake.effects) {
-            if (this.snake.effects[effect] > 0) {
-                const icon = this.powerupTypes[effect].emoji;
-                const duration = Math.ceil(this.snake.effects[effect] / 1000);
-                effectsDiv.innerHTML += `<span class="effect-icon">${icon}</span>`;
-            }
-        }
-    }
-
-    loadHighScore() {
-        const storedScore = localStorage.getItem('snakeHighScore');
-        this.highScore = storedScore ? parseInt(storedScore, 10) : 0;
-    }
-
-    saveHighScore() {
-        localStorage.setItem('snakeHighScore', this.highScore.toString());
-    }
-
-    updateHighScoreDisplay() {
-        document.getElementById('highScoreDisplay').textContent = this.highScore;
-    }
-
-    showAchievements() {
-        const achievements = this.player.checkAchievements();
-        const list = document.getElementById('achievementList');
-        list.innerHTML = '';
-        if (achievements.length === 0) {
-            list.innerHTML = '<li>Aún no has desbloqueado logros. ¡Sigue intentándolo!</li>';
-        } else {
-            achievements.forEach(ach => {
-                const li = document.createElement('li');
-                li.innerHTML = `<span class="icon">${ach.icon}</span> <strong>${ach.name}</strong>: ${ach.description}`;
-                list.appendChild(li);
-            });
-        }
-    }
-
-    checkAchievements() {
-        const achievements = this.player.checkAchievements();
-        achievements.forEach(ach => this.showAlert(`¡Logro desbloqueado: ${ach.name}!`, 3000));
-    }
-
-    createNatureBackground() {
-        // Función placeholder, se puede usar para generar un fondo dinámico
-    }
-}
-
+// Inicializar la Puntuación Máxima al cargar
 document.addEventListener('DOMContentLoaded', () => {
-    const game = new Game();
-    game.init();
+    loadHighScore();
+    // Asegurar que solo la pantalla de configuración sea visible al inicio
+    switchScreen(setupScreen); 
+});
+
+// --- GESTIÓN DE LOCAL STORAGE (High Score) ---
+function loadHighScore() {
+    const highscore = localStorage.getItem('snakeJinxHighScore') || 0;
+    highScoreDisplay.textContent = highscore;
+}
+
+function updateHighScore(newScore) {
+    const currentHighscore = parseInt(localStorage.getItem('snakeJinxHighScore') || 0);
+    if (newScore > currentHighscore) {
+        localStorage.setItem('snakeJinxHighScore', newScore);
+        $('newRecord').classList.remove('hidden');
+    } else {
+        $('newRecord').classList.add('hidden');
+    }
+}
+
+// --- EVENTOS DE CONFIGURACIÓN ---
+
+// Selector de color de la serpiente
+document.querySelectorAll('.snake-option').forEach(option => {
+    option.addEventListener('click', () => {
+        document.querySelectorAll('.snake-option').forEach(o => o.classList.remove('selected'));
+        option.classList.add('selected');
+        snakeColor = COLOR_MAP[option.getAttribute('data-snake')];
+    });
+});
+
+// Selector de dificultad
+document.querySelectorAll('.difficulty-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.difficulty-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        gameSpeedMs = parseInt(btn.getAttribute('data-diff'));
+    });
+});
+
+// Botón COMENZAR JUEGO
+$('startGameBtn').addEventListener('click', () => {
+    const nameInput = $('playerName').value.trim();
+    if (nameInput === "") {
+        nameAlert.classList.remove('hidden');
+        return;
+    }
+    nameAlert.classList.add('hidden');
+    playerName = nameInput;
+    switchScreen(gameScreen);
+    startGame();
+});
+
+// --- LÓGICA DE INICIO Y RESETEO ---
+
+function initGame() {
+    // Reiniciar estado
+    snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    dx = 1; 
+    dy = 0;
+    score = 0;
+    lives = 3;
+    level = 1;
+    miceEaten = 0;
+    timeElapsed = 0;
+    isPaused = false;
+    lastDirection = 'right';
+    growSnake = false; // Resetear el flag de crecimiento
+
+    // Limpiar intervalos si existen
+    if (gameLoopInterval) clearInterval(gameLoopInterval);
+    if (timerInterval) clearInterval(timerInterval);
+    
+    // Colocar comida inicial y actualizar UI
+    placeFood();
+    updateUI();
+}
+
+function startGame() {
+    initGame();
+    
+    // Iniciar el loop de juego
+    gameLoopInterval = setInterval(main, gameSpeedMs);
+    
+    // Iniciar el temporizador
+    timerInterval = setInterval(updateTimer, 1000);
+
+    // Escuchar inputs solo cuando el juego está activo
+    document.addEventListener('keydown', changeDirection);
+}
+
+// --- BUCLE PRINCIPAL Y DIBUJO ---
+
+function main() {
+    if (isPaused) return;
+
+    // 1. Mover la serpiente
+    moveSnake();
+
+    // 2. Comprobar colisiones
+    if (checkWallCollision() || checkSelfCollision()) {
+        handleCollision();
+    }
+
+    // 3. Comprobar si come la comida
+    if (checkFoodEaten()) {
+        handleFoodEaten();
+    }
+
+    // 4. Dibujar
+    drawGame();
+}
+
+function drawGame() {
+    // Limpiar Canvas
+    ctx.fillStyle = '#1a202c';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Dibujar Comida (Ratón)
+    drawFood();
+    
+    // Dibujar Serpiente
+    drawSnake();
+}
+
+function drawSnake() {
+    snake.forEach((segment, index) => {
+        // Color de la cabeza ligeramente diferente o un pequeño borde
+        if (index === 0) {
+            ctx.fillStyle = snakeColor;
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            // Dibujar círculo más grande para la cabeza
+            ctx.arc(segment.x * CELL_SIZE + CELL_SIZE / 2, 
+                    segment.y * CELL_SIZE + CELL_SIZE / 2, 
+                    CELL_SIZE / 2, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+        } else {
+            ctx.fillStyle = snakeColor;
+            ctx.strokeStyle = '#1a202c';
+            ctx.lineWidth = 1;
+            ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+    });
+}
+
+function drawFood() {
+     // Usar un emoji o un color contrastante para el ratón (food)
+    ctx.font = `${CELL_SIZE}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Dibujamos el emoji de Ratón
+    ctx.fillText('🐁', food.x * CELL_SIZE + CELL_SIZE / 2, food.y * CELL_SIZE + CELL_SIZE / 2);
+}
+
+// --- MOVIMIENTO Y LÓGICA DE POSICIÓN ---
+
+function moveSnake() {
+    // Crea la nueva cabeza
+    const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+    
+    // Añade la nueva cabeza al inicio del cuerpo
+    snake.unshift(head);
+    
+    // Solo eliminar la cola si no está creciendo
+    if (!growSnake) {
+        snake.pop();
+    } else {
+        growSnake = false; // Resetear el flag después de crecer
+    }
+}
+
+function placeFood() {
+    let newFoodPosition;
+    do {
+        newFoodPosition = {
+            x: Math.floor(Math.random() * GRID_SIZE),
+            y: Math.floor(Math.random() * GRID_SIZE)
+        };
+    } while (isSnake(newFoodPosition)); // Asegura que no aparezca sobre la serpiente
+
+    food = newFoodPosition;
+}
+
+function isSnake(pos) {
+    return snake.some(segment => segment.x === pos.x && segment.y === pos.y);
+}
+
+// --- COLISIONES Y EVENTOS ---
+
+function checkWallCollision() {
+    const headX = snake[0].x;
+    const headY = snake[0].y;
+    return headX < 0 || headX >= GRID_SIZE || headY < 0 || headY >= GRID_SIZE;
+}
+
+function checkSelfCollision() {
+    const head = snake[0];
+    // Comprueba si la cabeza colisiona con cualquier segmento del cuerpo (a partir del índice 1)
+    for (let i = 1; i < snake.length; i++) {
+        if (snake[i].x === head.x && snake[i].y === head.y) return true;
+    }
+    return false;
+}
+
+function handleCollision() {
+    lives--;
+    
+    if (lives <= 0) {
+        gameOver();
+    } else {
+        // Reiniciar posición y dirección tras perder una vida
+        ctx.globalAlpha = 0.5; // Efecto de parpadeo
+        setTimeout(() => ctx.globalAlpha = 1.0, 200);
+
+        snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+        dx = 1; 
+        dy = 0;
+        lastDirection = 'right';
+        growSnake = false; // Resetear el flag de crecimiento
+        updateUI();
+    }
+}
+
+function checkFoodEaten() {
+    const head = snake[0];
+    return head.x === food.x && head.y === food.y;
+}
+
+function handleFoodEaten() {
+    score += 10;
+    miceEaten++;
+    
+    // Marcar que la serpiente debe crecer en el próximo movimiento
+    growSnake = true;
+    
+    // Colocar nueva comida
+    placeFood();
+    
+    // Comprobar avance de nivel (e.g., cada 5 ratones)
+    if (miceEaten % 5 === 0) {
+        levelUp();
+    }
+
+    updateUI();
+}
+
+function levelUp() {
+    level++;
+    // Aumentar la velocidad solo si el intervalo de velocidad lo permite (más difícil)
+    // La velocidad mínima es 70ms (Dificultad Difícil)
+    if (gameSpeedMs > 70) {
+        gameSpeedMs = Math.max(70, gameSpeedMs - 5);
+        clearInterval(gameLoopInterval);
+        gameLoopInterval = setInterval(main, gameSpeedMs);
+    }
+}
+
+// --- INTERFAZ DE USUARIO (UI) ---
+
+function updateUI() {
+    $('playerInfo').textContent = `Jugador: ${playerName}`;
+    $('score').textContent = `Puntuación: ${score}`;
+    $('levelInfo').textContent = `Nivel: ${level}`;
+    $('miceCounter').textContent = `🐁: ${miceEaten}`;
+    
+    // Actualizar corazones
+    let heartsHtml = '';
+    for (let i = 0; i < 5; i++) {
+        heartsHtml += i < lives ? '❤️ ' : '🤍 ';
+    }
+    $('heartsContainer').textContent = heartsHtml.trim();
+}
+
+function formatTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
+
+function updateTimer() {
+    if (!isPaused) {
+        timeElapsed++;
+        $('gameTimer').textContent = `Tiempo: ${formatTime(timeElapsed)}`;
+    }
+}
+
+// --- GESTIÓN DEL JUEGO (Pausa / Fin) ---
+
+function pauseGame() {
+    if (!gameLoopInterval) return;
+    isPaused = true;
+    clearInterval(gameLoopInterval);
+    switchScreen(pausePanel);
+}
+
+function resumeGame() {
+    if (!isPaused) return;
+    isPaused = false;
+    switchScreen(gameScreen);
+    gameLoopInterval = setInterval(main, gameSpeedMs);
+}
+
+function gameOver() {
+    clearInterval(gameLoopInterval);
+    clearInterval(timerInterval);
+    document.removeEventListener('keydown', changeDirection);
+
+    updateHighScore(score);
+    loadHighScore(); // Recargar el high score para mostrarlo en la pantalla de setup
+
+    $('finalScore').textContent = `Tu Puntuación: ${score}`;
+    $('finalStats').innerHTML = `
+        <p>Nivel Alcanzado: ${level}</p>
+        <p>Ratones Comidos: ${miceEaten}</p>
+        <p>Tiempo Jugado: ${formatTime(timeElapsed)}</p>
+    `;
+    
+    switchScreen(gameOverScreen);
+}
+
+// --- CONTROL DE DIRECCIÓN Y EVENTOS DE BOTONES ---
+
+function changeDirection(event) {
+    const keyPressed = event.key;
+    let newDx = dx;
+    let newDy = dy;
+    let newDir = lastDirection;
+
+    switch (keyPressed) {
+        case 'ArrowUp':
+        case 'w':
+            if (lastDirection !== 'down') { newDy = -1; newDx = 0; newDir = 'up'; }
+            break;
+        case 'ArrowDown':
+        case 's':
+            if (lastDirection !== 'up') { newDy = 1; newDx = 0; newDir = 'down'; }
+            break;
+        case 'ArrowLeft':
+        case 'a':
+            if (lastDirection !== 'right') { newDx = -1; newDy = 0; newDir = 'left'; }
+            break;
+        case 'ArrowRight':
+        case 'd':
+            if (lastDirection !== 'left') { newDx = 1; newDy = 0; newDir = 'right'; }
+            break;
+        case ' ': // Espacio para pausa
+            isPaused ? resumeGame() : pauseGame();
+            break;
+    }
+    
+    // Aplicar la nueva dirección si es válida
+    if (newDir !== lastDirection) {
+        dx = newDx;
+        dy = newDy;
+        lastDirection = newDir;
+    }
+}
+
+// Manejo de eventos de botones
+$('pauseBtn').addEventListener('click', pauseGame);
+$('resumeBtn').addEventListener('click', resumeGame);
+$('restartBtn').addEventListener('click', () => {
+    switchScreen(gameScreen);
+    startGame();
+});
+
+// Botones de Menú Principal
+const backToSetup = () => {
+    clearInterval(gameLoopInterval);
+    clearInterval(timerInterval);
+    document.removeEventListener('keydown', changeDirection);
+    switchScreen(setupScreen);
+};
+
+$('menuBtn').addEventListener('click', backToSetup);
+$('backToSetupBtn').addEventListener('click', backToSetup);
+$('menuFromPauseBtn').addEventListener('click', backToSetup);
+
+// Controles Táctiles (Móviles)
+document.querySelectorAll('.arrow-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const dir = e.target.getAttribute('data-dir');
+        // Simular el cambio de dirección sin un evento keydown completo
+        switch (dir) {
+            case 'up':
+                if (lastDirection !== 'down') { dx = 0; dy = -1; lastDirection = 'up'; }
+                break;
+            case 'down':
+                if (lastDirection !== 'up') { dx = 0; dy = 1; lastDirection = 'down'; }
+                break;
+            case 'left':
+                if (lastDirection !== 'right') { dx = -1; dy = 0; lastDirection = 'left'; }
+                break;
+            case 'right':
+                if (lastDirection !== 'left') { dx = 1; dy = 0; lastDirection = 'right'; }
+                break;
+        }
+    });
 });
