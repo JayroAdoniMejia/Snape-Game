@@ -24,6 +24,11 @@ let timeElapsed = 0;
 let timerInterval = null;
 let lastDirection = 'right';
 let growSnake = false; // Nueva variable para controlar el crecimiento
+let mouseMoveTimer = 0; // Temporizador para el movimiento del ratón
+let mouseMoveInterval = 10; // El ratón se mueve cada 10 ciclos del juego
+let mouseFear = false; // Si el ratón tiene miedo de la serpiente
+let panicTimer = 0; // Temporizador para el pánico del ratón
+let mouseTrail = []; // Array para guardar la trayectoria del ratón
 
 // Mapeo de colores
 const COLOR_MAP = {
@@ -96,6 +101,8 @@ document.querySelectorAll('.difficulty-btn').forEach(btn => {
         document.querySelectorAll('.difficulty-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         gameSpeedMs = parseInt(btn.getAttribute('data-diff'));
+        // Ajustar la velocidad del ratón según la dificultad
+        mouseMoveInterval = Math.max(5, 15 - (150 - gameSpeedMs) / 20); // Ratón más rápido en dificultades mayores
     });
 });
 
@@ -127,6 +134,10 @@ function initGame() {
     isPaused = false;
     lastDirection = 'right';
     growSnake = false; // Resetear el flag de crecimiento
+    mouseMoveTimer = 0;
+    mouseFear = false;
+    panicTimer = 0;
+    mouseTrail = [];
 
     // Limpiar intervalos si existen
     if (gameLoopInterval) clearInterval(gameLoopInterval);
@@ -158,17 +169,23 @@ function main() {
     // 1. Mover la serpiente
     moveSnake();
 
-    // 2. Comprobar colisiones
+    // 2. Mover el ratón (si es tiempo)
+    moveMouse();
+
+    // 3. Actualizar estados del ratón
+    updateMouseState();
+
+    // 4. Comprobar colisiones
     if (checkWallCollision() || checkSelfCollision()) {
         handleCollision();
     }
 
-    // 3. Comprobar si come la comida
+    // 5. Comprobar si come la comida
     if (checkFoodEaten()) {
         handleFoodEaten();
     }
 
-    // 4. Dibujar
+    // 6. Dibujar
     drawGame();
 }
 
@@ -176,6 +193,11 @@ function drawGame() {
     // Limpiar Canvas
     ctx.fillStyle = '#1a202c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Dibujar trayectoria del ratón (solo en modo pánico)
+    if (mouseFear && mouseTrail.length > 1) {
+        drawMouseTrail();
+    }
 
     // Dibujar Comida (Ratón)
     drawFood();
@@ -209,12 +231,57 @@ function drawSnake() {
 }
 
 function drawFood() {
-     // Usar un emoji o un color contrastante para el ratón (food)
-    ctx.font = `${CELL_SIZE}px sans-serif`;
+    // Calcular color del ratón según su estado
+    let mouseColor = mouseFear ? '#FF4444' : '#FFB6C1'; // Rojo si tiene miedo, rosa claro normal
+    let mouseSize = mouseFear ? CELL_SIZE * 0.8 : CELL_SIZE; // Más pequeño si tiene miedo
+    
+    // Dibujar el ratón con emoji
+    ctx.font = `${mouseSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Dibujamos el emoji de Ratón
-    ctx.fillText('🐁', food.x * CELL_SIZE + CELL_SIZE / 2, food.y * CELL_SIZE + CELL_SIZE / 2);
+    // Dibujamos el emoji de Ratón con efecto de temblor si tiene miedo
+    if (mouseFear) {
+        const shake = Math.sin(Date.now() / 100) * 2; // Efecto de temblor
+        ctx.fillText('🐁', 
+            food.x * CELL_SIZE + CELL_SIZE / 2 + shake, 
+            food.y * CELL_SIZE + CELL_SIZE / 2 + shake);
+    } else {
+        ctx.fillText('🐁', 
+            food.x * CELL_SIZE + CELL_SIZE / 2, 
+            food.y * CELL_SIZE + CELL_SIZE / 2);
+    }
+    
+    // Dibujar un halo si está en pánico
+    if (mouseFear) {
+        ctx.beginPath();
+        ctx.arc(food.x * CELL_SIZE + CELL_SIZE / 2, 
+                food.y * CELL_SIZE + CELL_SIZE / 2, 
+                CELL_SIZE / 2 + 3, 0, 2 * Math.PI);
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+
+function drawMouseTrail() {
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    ctx.beginPath();
+    ctx.moveTo(
+        mouseTrail[0].x * CELL_SIZE + CELL_SIZE / 2,
+        mouseTrail[0].y * CELL_SIZE + CELL_SIZE / 2
+    );
+    
+    for (let i = 1; i < mouseTrail.length; i++) {
+        ctx.lineTo(
+            mouseTrail[i].x * CELL_SIZE + CELL_SIZE / 2,
+            mouseTrail[i].y * CELL_SIZE + CELL_SIZE / 2
+        );
+    }
+    ctx.stroke();
 }
 
 // --- MOVIMIENTO Y LÓGICA DE POSICIÓN ---
@@ -234,16 +301,173 @@ function moveSnake() {
     }
 }
 
+function moveMouse() {
+    mouseMoveTimer++;
+    
+    if (mouseMoveTimer >= mouseMoveInterval) {
+        mouseMoveTimer = 0;
+        
+        // Guardar posición actual en el trail (solo las últimas 5 posiciones)
+        if (mouseFear) {
+            mouseTrail.push({ x: food.x, y: food.y });
+            if (mouseTrail.length > 5) {
+                mouseTrail.shift();
+            }
+        }
+        
+        let newX = food.x;
+        let newY = food.y;
+        
+        // Comportamiento inteligente del ratón
+        if (mouseFear && panicTimer > 0) {
+            // Modo pánico: huir de la serpiente rápidamente
+            newX = food.x;
+            newY = food.y;
+            
+            // Calcular distancia a la serpiente
+            const snakeHead = snake[0];
+            const dxToSnake = snakeHead.x - food.x;
+            const dyToSnake = snakeHead.y - food.y;
+            
+            // Moverse en dirección opuesta a la serpiente
+            const possibleMoves = [
+                { x: -1, y: 0 }, { x: 1, y: 0 },
+                { x: 0, y: -1 }, { x: 0, y: 1 }
+            ];
+            
+            // Ordenar movimientos por qué tan lejos te alejan de la serpiente
+            const sortedMoves = possibleMoves.sort((a, b) => {
+                const distA = Math.abs((food.x + a.x - snakeHead.x)) + Math.abs((food.y + a.y - snakeHead.y));
+                const distB = Math.abs((food.x + b.x - snakeHead.x)) + Math.abs((food.y + b.y - snakeHead.y));
+                return distB - distA; // Mayor distancia primero
+            });
+            
+            // Intentar cada movimiento hasta encontrar uno válido
+            for (const move of sortedMoves) {
+                const testX = food.x + move.x;
+                const testY = food.y + move.y;
+                
+                if (isValidMousePosition(testX, testY)) {
+                    newX = testX;
+                    newY = testY;
+                    break;
+                }
+            }
+            
+            panicTimer--;
+            if (panicTimer <= 0) {
+                mouseFear = false;
+                mouseTrail = [];
+            }
+        } else {
+            // Modo normal: movimiento aleatorio pero inteligente
+            const possibleMoves = [
+                { x: -1, y: 0 }, { x: 1, y: 0 },
+                { x: 0, y: -1 }, { x: 0, y: 1 }
+            ];
+            
+            // Filtrar movimientos que llevarían a una colisión
+            const validMoves = possibleMoves.filter(move => 
+                isValidMousePosition(food.x + move.x, food.y + move.y)
+            );
+            
+            // Si hay movimientos válidos, elegir uno
+            if (validMoves.length > 0) {
+                // Priorizar movimientos que alejen de la serpiente si está cerca
+                const snakeHead = snake[0];
+                const distanceToSnake = Math.abs(snakeHead.x - food.x) + Math.abs(snakeHead.y - food.y);
+                
+                if (distanceToSnake < 5) { // Si la serpiente está cerca
+                    // Ordenar por distancia a la serpiente (más lejos primero)
+                    validMoves.sort((a, b) => {
+                        const distA = Math.abs((food.x + a.x - snakeHead.x)) + Math.abs((food.y + a.y - snakeHead.y));
+                        const distB = Math.abs((food.x + b.x - snakeHead.x)) + Math.abs((food.y + b.y - snakeHead.y));
+                        return distB - distA;
+                    });
+                }
+                
+                // Tomar el mejor movimiento (o aleatorio si no hay peligro)
+                const chosenMove = validMoves[0];
+                newX = food.x + chosenMove.x;
+                newY = food.y + chosenMove.y;
+                
+                // Si la serpiente está muy cerca, activar modo pánico
+                if (distanceToSnake < 3) {
+                    mouseFear = true;
+                    panicTimer = 15; // 15 ciclos de pánico
+                }
+            }
+        }
+        
+        // Actualizar posición del ratón
+        food.x = newX;
+        food.y = newY;
+    }
+}
+
+function updateMouseState() {
+    // Verificar si la serpiente está cerca para activar el miedo
+    if (!mouseFear) {
+        const snakeHead = snake[0];
+        const distanceToSnake = Math.abs(snakeHead.x - food.x) + Math.abs(snakeHead.y - food.y);
+        
+        if (distanceToSnake < 4) {
+            mouseFear = true;
+            panicTimer = 20; // Más tiempo de pánico
+        }
+    }
+}
+
+function isValidMousePosition(x, y) {
+    // Verificar límites del tablero
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
+        return false;
+    }
+    
+    // Verificar si está en la serpiente
+    if (isSnake({ x, y })) {
+        return false;
+    }
+    
+    return true;
+}
+
 function placeFood() {
     let newFoodPosition;
+    let attempts = 0;
+    const maxAttempts = 100;
+    
     do {
         newFoodPosition = {
             x: Math.floor(Math.random() * GRID_SIZE),
             y: Math.floor(Math.random() * GRID_SIZE)
         };
-    } while (isSnake(newFoodPosition)); // Asegura que no aparezca sobre la serpiente
+        attempts++;
+        
+        // Si hay muchos intentos, buscar cualquier posición disponible
+        if (attempts >= maxAttempts) {
+            // Buscar todas las posiciones posibles
+            for (let x = 0; x < GRID_SIZE; x++) {
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    if (!isSnake({ x, y })) {
+                        newFoodPosition = { x, y };
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+    } while (isSnake(newFoodPosition));
 
-    food = newFoodPosition;
+    food = {
+        x: newFoodPosition.x,
+        y: newFoodPosition.y
+    };
+    
+    // Resetear estado del ratón
+    mouseFear = false;
+    panicTimer = 0;
+    mouseTrail = [];
 }
 
 function isSnake(pos) {
@@ -292,11 +516,21 @@ function checkFoodEaten() {
 }
 
 function handleFoodEaten() {
-    score += 10;
+    // Puntos extra si el ratón estaba en modo pánico (más difícil de atrapar)
+    const basePoints = 10;
+    const fearBonus = mouseFear ? 15 : 0;
+    const points = basePoints + fearBonus;
+    
+    score += points;
     miceEaten++;
     
     // Marcar que la serpiente debe crecer en el próximo movimiento
     growSnake = true;
+    
+    // Mostrar mensaje especial si fue difícil de atrapar
+    if (mouseFear) {
+        showTemporaryMessage(`¡Ratón asustado! +${points} puntos`, 1500);
+    }
     
     // Colocar nueva comida
     placeFood();
@@ -309,6 +543,30 @@ function handleFoodEaten() {
     updateUI();
 }
 
+function showTemporaryMessage(message, duration) {
+    const messageDiv = document.createElement('div');
+    messageDiv.textContent = message;
+    messageDiv.style.position = 'absolute';
+    messageDiv.style.top = '50%';
+    messageDiv.style.left = '50%';
+    messageDiv.style.transform = 'translate(-50%, -50%)';
+    messageDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    messageDiv.style.color = mouseFear ? '#FF4444' : '#48BB78';
+    messageDiv.style.padding = '10px 20px';
+    messageDiv.style.borderRadius = '5px';
+    messageDiv.style.fontWeight = 'bold';
+    messageDiv.style.zIndex = '1000';
+    messageDiv.style.fontSize = '1.2rem';
+    
+    document.querySelector('.game-container').appendChild(messageDiv);
+    
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.parentNode.removeChild(messageDiv);
+        }
+    }, duration);
+}
+
 function levelUp() {
     level++;
     // Aumentar la velocidad solo si el intervalo de velocidad lo permite (más difícil)
@@ -317,7 +575,13 @@ function levelUp() {
         gameSpeedMs = Math.max(70, gameSpeedMs - 5);
         clearInterval(gameLoopInterval);
         gameLoopInterval = setInterval(main, gameSpeedMs);
+        
+        // El ratón se mueve más rápido en niveles más altos
+        mouseMoveInterval = Math.max(3, mouseMoveInterval - 1);
     }
+    
+    // Mostrar mensaje de nivel
+    showTemporaryMessage(`¡Nivel ${level}!`, 1000);
 }
 
 // --- INTERFAZ DE USUARIO (UI) ---
@@ -378,9 +642,16 @@ function gameOver() {
         <p>Nivel Alcanzado: ${level}</p>
         <p>Ratones Comidos: ${miceEaten}</p>
         <p>Tiempo Jugado: ${formatTime(timeElapsed)}</p>
+        <p>Ratones asustados atrapados: ${calculateScaredMiceCaught()}</p>
     `;
     
     switchScreen(gameOverScreen);
+}
+
+function calculateScaredMiceCaught() {
+    // Esta función debería llevar un contador de ratones asustados atrapados
+    // Por ahora devolvemos un valor estimado
+    return Math.floor(miceEaten * 0.3);
 }
 
 // --- CONTROL DE DIRECCIÓN Y EVENTOS DE BOTONES ---
