@@ -6,6 +6,20 @@ const ctx = canvas.getContext('2d');
 const GRID_SIZE = 20; // 20x20 celdas
 const CELL_SIZE = canvas.width / GRID_SIZE; // 600px / 20 = 30px
 
+// Definición de objetos trampa - TODAS VISIBLES
+const TRAP_OBJECTS = [
+    { emoji: '🔪', name: 'Cuchillo', color: '#FFD700', dangerous: true, shadowColor: '#FF0000' },
+    { emoji: '⛓️', name: 'Cadena', color: '#C0C0C0', dangerous: true, shadowColor: '#808080' },
+    { emoji: '💣', name: 'Bomba', color: '#FF0000', dangerous: true, shadowColor: '#FF4500' },
+    { emoji: '🪚', name: 'Motocierra', color: '#8B4513', dangerous: true, shadowColor: '#D2691E' },
+    { emoji: '🕸️', name: 'Red', color: '#FFFFFF', dangerous: true, shadowColor: '#F0F8FF' },
+    { emoji: '🗡️', name: 'Espada', color: '#6495ED', dangerous: true, shadowColor: '#4169E1' },
+    { emoji: '🧨', name: 'Explosivo', color: '#FF4500', dangerous: true, shadowColor: '#FF6347' },
+    { emoji: '⚔️', name: 'Daga', color: '#B0C4DE', dangerous: true, shadowColor: '#778899' },
+    { emoji: '🔫', name: 'Pistola', color: '#2F4F4F', dangerous: true, shadowColor: '#696969' },
+    { emoji: '🏹', name: 'Arco', color: '#DAA520', dangerous: true, shadowColor: '#B8860B' }
+];
+
 // Estado del juego
 let snake = [];
 let food = {}; // El "ratón"
@@ -28,6 +42,14 @@ let mouseMoveCounter = 0; // Contador para movimiento más frecuente
 let mouseDirection = null; // Dirección actual del ratón
 let mouseSpeed = 1; // Velocidad base del ratón
 let mouseAgility = 0.7; // Probabilidad de cambiar dirección
+
+// Variables para objetos trampa
+let trapObjects = [];
+let lastTrapChange = Date.now();
+let trapChangeTime = 35; // segundos
+let trapChangeTimer = null;
+let collisionCooldown = false; // Para evitar múltiples colisiones rápidas
+let trapTimerElement = null; // Referencia al elemento del temporizador
 
 // Mapeo de colores
 const COLOR_MAP = {
@@ -63,6 +85,12 @@ function switchScreen(activeScreen) {
         screen.classList.remove('active');
     });
     activeScreen.style.display = 'flex';
+    
+    // Ocultar temporizador de trampas si no estamos en la pantalla de juego
+    if (activeScreen !== gameScreen && trapTimerElement) {
+        trapTimerElement.style.display = 'none';
+    }
+    
     if (activeScreen === setupScreen) {
         activeScreen.classList.add('active');
     }
@@ -71,7 +99,8 @@ function switchScreen(activeScreen) {
 // Inicializar la Puntuación Máxima al cargar
 document.addEventListener('DOMContentLoaded', () => {
     loadHighScore();
-    switchScreen(setupScreen); 
+    switchScreen(setupScreen);
+    createTrapTimerElement();
 });
 
 // --- GESTIÓN DE LOCAL STORAGE (High Score) ---
@@ -150,11 +179,19 @@ function initGame() {
     growSnake = false;
     mouseMoveCounter = 0;
     mouseDirection = MOUSE_DIRECTIONS[Math.floor(Math.random() * 4)]; // Dirección aleatoria inicial
+    
+    // Reiniciar variables de objetos trampa
+    trapObjects = [];
+    lastTrapChange = Date.now();
+    collisionCooldown = false;
 
     if (gameLoopInterval) clearInterval(gameLoopInterval);
     if (timerInterval) clearInterval(timerInterval);
+    if (trapChangeTimer) clearInterval(trapChangeTimer);
     
     placeFood();
+    generateTraps();
+    startTrapChangeTimer();
     updateUI();
 }
 
@@ -164,6 +201,11 @@ function startGame() {
     gameLoopInterval = setInterval(main, gameSpeedMs);
     timerInterval = setInterval(updateTimer, 1000);
     document.addEventListener('keydown', changeDirection);
+    
+    // Mostrar temporizador de trampas al iniciar juego
+    if (trapTimerElement) {
+        trapTimerElement.style.display = 'block';
+    }
 }
 
 // --- BUCLE PRINCIPAL Y DIBUJO ---
@@ -176,17 +218,25 @@ function main() {
     // 2. Mover el ratón (más frecuente)
     moveMouse();
 
-    // 3. Comprobar colisiones
+    // 3. Comprobar colisiones con paredes y serpiente
     if (checkWallCollision() || checkSelfCollision()) {
         handleCollision();
     }
 
-    // 4. Comprobar si come la comida
+    // 4. Comprobar colisión con trampas
+    if (!collisionCooldown && checkTrapCollision()) {
+        handleTrapCollision();
+    }
+
+    // 5. Comprobar si come la comida
     if (checkFoodEaten()) {
         handleFoodEaten();
     }
 
-    // 5. Dibujar
+    // 6. Actualizar temporizador de trampas
+    updateTrapTimerDisplay();
+
+    // 7. Dibujar
     drawGame();
 }
 
@@ -195,6 +245,9 @@ function drawGame() {
     ctx.fillStyle = '#1a202c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Dibujar Trampas - ANTES de la comida y serpiente
+    drawTraps();
+    
     // Dibujar Comida (Ratón)
     drawFood();
     
@@ -232,6 +285,36 @@ function drawFood() {
     ctx.fillText('🐁', 
         food.x * CELL_SIZE + CELL_SIZE / 2, 
         food.y * CELL_SIZE + CELL_SIZE / 2);
+}
+
+function drawTraps() {
+    trapObjects.forEach(trap => {
+        // Configurar fuente más grande para mejor visibilidad
+        ctx.font = `${CELL_SIZE + 2}px sans-serif`; // +2px para mejor visibilidad
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Efecto de brillo para las trampas - TODAS VISIBLES
+        ctx.shadowColor = trap.shadowColor || trap.color;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = trap.color;
+        ctx.fillText(trap.emoji, 
+            trap.x * CELL_SIZE + CELL_SIZE / 2, 
+            trap.y * CELL_SIZE + CELL_SIZE / 2);
+        
+        // Resetear sombra
+        ctx.shadowBlur = 0;
+        
+        // Dibujar un borde alrededor para mejor visibilidad
+        ctx.strokeStyle = trap.color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+            trap.x * CELL_SIZE, 
+            trap.y * CELL_SIZE, 
+            CELL_SIZE, 
+            CELL_SIZE
+        );
+    });
 }
 
 // --- MOVIMIENTO Y LÓGICA DE POSICIÓN ---
@@ -313,13 +396,18 @@ function isValidMousePosition(x, y) {
         return false;
     }
     
+    // Verificar trampas (el ratón también las evita)
+    if (trapObjects.some(trap => trap.x === x && trap.y === y)) {
+        return false;
+    }
+    
     return true;
 }
 
 function placeFood() {
     let newFoodPosition;
     let attempts = 0;
-    const maxAttempts = 50;
+    const maxAttempts = 100;
     
     do {
         newFoodPosition = {
@@ -332,7 +420,7 @@ function placeFood() {
             // Buscar cualquier posición disponible
             for (let x = 0; x < GRID_SIZE; x++) {
                 for (let y = 0; y < GRID_SIZE; y++) {
-                    if (!isSnake({ x, y })) {
+                    if (!isPositionOccupied({ x, y })) {
                         newFoodPosition = { x, y };
                         break;
                     }
@@ -340,7 +428,7 @@ function placeFood() {
             }
             break;
         }
-    } while (isSnake(newFoodPosition));
+    } while (isPositionOccupied(newFoodPosition));
 
     food = {
         x: newFoodPosition.x,
@@ -352,8 +440,243 @@ function placeFood() {
     mouseMoveCounter = 0;
 }
 
+function isPositionOccupied(pos) {
+    return isSnake(pos) || trapObjects.some(trap => trap.x === pos.x && trap.y === pos.y);
+}
+
 function isSnake(pos) {
     return snake.some(segment => segment.x === pos.x && segment.y === pos.y);
+}
+
+// --- SISTEMA DE TRAMPAS ---
+function generateTraps() {
+    trapObjects = [];
+    // 4-5 trampas distribuidas estratégicamente
+    const trapCount = 4 + Math.floor(level / 5);
+    
+    // Posiciones estratégicas en diferentes zonas del mapa
+    const strategicZones = [
+        { x: 2, y: 2 },    // Esquina superior izquierda
+        { x: 17, y: 2 },   // Esquina superior derecha
+        { x: 2, y: 17 },   // Esquina inferior izquierda
+        { x: 17, y: 17 },  // Esquina inferior derecha
+        { x: 9, y: 2 },    // Centro superior
+        { x: 2, y: 9 },    // Centro izquierdo
+        { x: 17, y: 9 },   // Centro derecho
+        { x: 9, y: 17 },   // Centro inferior
+        { x: 5, y: 5 },    // Cuadrante 1
+        { x: 14, y: 5 },   // Cuadrante 2
+        { x: 5, y: 14 },   // Cuadrante 3
+        { x: 14, y: 14 }   // Cuadrante 4
+    ];
+    
+    // Mezclar las posiciones estratégicas
+    const shuffledZones = [...strategicZones].sort(() => Math.random() - 0.5);
+    
+    // Usar diferentes trampas para variedad
+    const shuffledTraps = [...TRAP_OBJECTS].sort(() => Math.random() - 0.5);
+    
+    for (let i = 0; i < Math.min(trapCount, shuffledZones.length, shuffledTraps.length); i++) {
+        const zone = shuffledZones[i];
+        const trap = shuffledTraps[i];
+        
+        let newTrap;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        do {
+            // Variar ligeramente la posición dentro de la zona
+            const xVariation = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
+            const yVariation = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
+            
+            newTrap = {
+                x: Math.max(1, Math.min(GRID_SIZE - 2, zone.x + xVariation)),
+                y: Math.max(1, Math.min(GRID_SIZE - 2, zone.y + yVariation)),
+                ...trap,
+                id: Date.now() + i
+            };
+            attempts++;
+        } while (isPositionOccupied(newTrap) && attempts < maxAttempts);
+        
+        if (attempts < maxAttempts) {
+            trapObjects.push(newTrap);
+        } else {
+            // Si no se puede colocar en la zona estratégica, buscar cualquier posición
+            let fallbackPosition;
+            let fallbackAttempts = 0;
+            const maxFallbackAttempts = 30;
+            
+            do {
+                fallbackPosition = {
+                    x: Math.floor(Math.random() * GRID_SIZE),
+                    y: Math.floor(Math.random() * GRID_SIZE)
+                };
+                fallbackAttempts++;
+                
+                if (fallbackAttempts >= maxFallbackAttempts) {
+                    // Último intento: buscar sistemáticamente
+                    for (let x = 0; x < GRID_SIZE; x++) {
+                        for (let y = 0; y < GRID_SIZE; y++) {
+                            if (!isPositionOccupied({ x, y })) {
+                                fallbackPosition = { x, y };
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+            } while (isPositionOccupied(fallbackPosition));
+            
+            newTrap.x = fallbackPosition.x;
+            newTrap.y = fallbackPosition.y;
+            trapObjects.push(newTrap);
+        }
+    }
+}
+
+function checkTrapCollision() {
+    const head = snake[0];
+    
+    for (let i = 0; i < trapObjects.length; i++) {
+        if (head.x === trapObjects[i].x && head.y === trapObjects[i].y) {
+            return trapObjects[i]; // Retornar la trampa con la que colisionó
+        }
+    }
+    
+    return null; // No hay colisión
+}
+
+function handleTrapCollision() {
+    // Activar cooldown para evitar múltiples colisiones rápidas
+    collisionCooldown = true;
+    setTimeout(() => {
+        collisionCooldown = false;
+    }, 1000); // 1 segundo de cooldown
+    
+    lives--;
+    
+    // Mensaje específico según el tipo de trampa
+    const trap = checkTrapCollision();
+    if (trap) {
+        let message = '';
+        switch(trap.emoji) {
+            case '🔪': message = '¡Cortado por un cuchillo!'; break;
+            case '🪚': message = '¡Atrapado en la motocierra!'; break;
+            case '🕸️': message = '¡Atrapado en la red!'; break;
+            case '💣': message = '¡Explotó por una bomba!'; break;
+            case '⛓️': message = '¡Enredado en cadenas!'; break;
+            case '🗡️': message = '¡Empalado por una espada!'; break;
+            case '🧨': message = '¡Explosivo activado!'; break;
+            case '⚔️': message = '¡Herido por una daga!'; break;
+            case '🔫': message = '¡Disparado!'; break;
+            case '🏹': message = '¡Flecha al corazón!'; break;
+            default: message = '¡Trampa activada!';
+        }
+        showAlert(`${message} -1 vida`, 1500);
+    }
+    
+    // Efecto visual de colisión
+    canvas.classList.add('collision-effect');
+    setTimeout(() => canvas.classList.remove('collision-effect'), 500);
+    
+    if (lives <= 0) {
+        gameOver();
+    } else {
+        // Reiniciar posición de la serpiente
+        snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+        dx = 1; 
+        dy = 0;
+        lastDirection = 'right';
+        growSnake = false;
+        updateUI();
+    }
+}
+
+function startTrapChangeTimer() {
+    if (trapChangeTimer) clearInterval(trapChangeTimer);
+    
+    trapChangeTimer = setInterval(() => {
+        const timeSinceChange = Date.now() - lastTrapChange;
+        const timeRemaining = Math.max(0, trapChangeTime * 1000 - timeSinceChange);
+        const seconds = Math.ceil(timeRemaining / 1000);
+        
+        if (seconds <= 0) {
+            changeTraps();
+            lastTrapChange = Date.now();
+        }
+    }, 1000);
+}
+
+function updateTrapTimerDisplay() {
+    const timeSinceChange = Date.now() - lastTrapChange;
+    const timeRemaining = Math.max(0, trapChangeTime * 1000 - timeSinceChange);
+    const seconds = Math.ceil(timeRemaining / 1000);
+    
+    if (trapTimerElement && seconds > 0) {
+        trapTimerElement.style.display = 'block';
+        trapTimerElement.textContent = `Cambio: ${seconds}s`;
+        
+        // Cambiar color según el tiempo restante
+        if (seconds <= 5) {
+            trapTimerElement.style.color = '#ff4444';
+            trapTimerElement.style.animation = 'pulse 0.5s infinite';
+        } else if (seconds <= 10) {
+            trapTimerElement.style.color = '#ffa500';
+        } else {
+            trapTimerElement.style.color = '#48bb78';
+            trapTimerElement.style.animation = 'none';
+        }
+    }
+}
+
+function changeTraps() {
+    generateTraps();
+    
+    // Mostrar notificación
+    showTrapChangeAlert('¡Las trampas han cambiado de lugar!');
+}
+
+function showTrapChangeAlert(message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'trap-change-alert';
+    alertDiv.textContent = message;
+    $('gameScreen').appendChild(alertDiv);
+    
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.parentNode.removeChild(alertDiv);
+        }
+    }, 2000);
+}
+
+function showAlert(message, duration = 2000) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'game-alert';
+    alertDiv.textContent = message;
+    $('gameScreen').appendChild(alertDiv);
+    
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.parentNode.removeChild(alertDiv);
+        }
+    }, duration);
+}
+
+// --- FUNCIONES AUXILIARES DE INTERFAZ ---
+function createTrapTimerElement() {
+    // Crear elemento solo si no existe
+    if (!trapTimerElement) {
+        trapTimerElement = document.createElement('div');
+        trapTimerElement.id = 'trapTimer';
+        trapTimerElement.className = 'trap-timer';
+        trapTimerElement.style.display = 'none'; // OCULTO por defecto
+        
+        const gameContainer = document.querySelector('.game-container');
+        if (gameContainer) {
+            gameContainer.appendChild(trapTimerElement);
+        }
+    }
+    return trapTimerElement;
 }
 
 // --- COLISIONES Y EVENTOS ---
@@ -377,8 +700,9 @@ function handleCollision() {
     if (lives <= 0) {
         gameOver();
     } else {
-        ctx.globalAlpha = 0.5;
-        setTimeout(() => ctx.globalAlpha = 1.0, 200);
+        // Efecto visual de colisión
+        canvas.classList.add('collision-effect');
+        setTimeout(() => canvas.classList.remove('collision-effect'), 500);
 
         snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
         dx = 1; 
@@ -422,6 +746,9 @@ function levelUp() {
     
     // El ratón se vuelve más ágil en niveles más altos
     mouseAgility = Math.min(0.9, mouseAgility + 0.05);
+    
+    // Regenerar trampas con nueva cantidad
+    generateTraps();
 }
 
 // --- INTERFAZ DE USUARIO (UI) ---
@@ -457,6 +784,11 @@ function pauseGame() {
     isPaused = true;
     clearInterval(gameLoopInterval);
     switchScreen(pausePanel);
+    
+    // Ocultar temporizador en pausa
+    if (trapTimerElement) {
+        trapTimerElement.style.display = 'none';
+    }
 }
 
 function resumeGame() {
@@ -464,12 +796,23 @@ function resumeGame() {
     isPaused = false;
     switchScreen(gameScreen);
     gameLoopInterval = setInterval(main, gameSpeedMs);
+    
+    // Mostrar temporizador al reanudar
+    if (trapTimerElement) {
+        trapTimerElement.style.display = 'block';
+    }
 }
 
 function gameOver() {
     clearInterval(gameLoopInterval);
     clearInterval(timerInterval);
+    if (trapChangeTimer) clearInterval(trapChangeTimer);
     document.removeEventListener('keydown', changeDirection);
+
+    // Ocultar temporizador en game over
+    if (trapTimerElement) {
+        trapTimerElement.style.display = 'none';
+    }
 
     updateHighScore(score);
     loadHighScore();
@@ -532,7 +875,14 @@ $('restartBtn').addEventListener('click', () => {
 const backToSetup = () => {
     clearInterval(gameLoopInterval);
     clearInterval(timerInterval);
+    if (trapChangeTimer) clearInterval(trapChangeTimer);
     document.removeEventListener('keydown', changeDirection);
+    
+    // Ocultar temporizador al volver al menú
+    if (trapTimerElement) {
+        trapTimerElement.style.display = 'none';
+    }
+    
     switchScreen(setupScreen);
 };
 

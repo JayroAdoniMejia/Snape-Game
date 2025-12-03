@@ -11,6 +11,12 @@
 </head>
 <body>
     <div class="game-container">
+
+
+<!-- Agrega esto dentro del div.game-container, después del canvas -->
+<div id="objectTimer" class="object-timer">Cambio en: 30s</div>
+<div id="staticObjects" class="static-objects"></div>
+
         <!-- Pantalla de Configuración -->
         <div id="setupScreen" class="screen active">
             <h1 class="text-3xl md:text-5xl font-bold mb-4">🐍 SNAKE JINX 🐍</h1>
@@ -76,14 +82,16 @@
 
         <!-- Pantalla del Juego -->
         <div id="gameScreen" class="screen">
-            <div class="info-panel">
-                <span class="info-item" id="playerInfo">Jugador:</span>
-                <span class="info-item" id="score">Puntuación: 0</span>
-                <span class="info-item" id="levelInfo">Nivel: 1</span>
-                <span class="info-item" id="miceCounter">🐁: 0</span>
-                <span class="info-item" id="heartsContainer">❤️ ❤️ ❤️</span>
-                <span class="info-item" id="gameTimer">Tiempo: 0:00</span>
-            </div>
+            <!-- En el div.info-panel dentro de #gameScreen -->
+<div class="info-panel">
+    <span class="info-item" id="playerInfo">Jugador:</span>
+    <span class="info-item" id="score">Puntuación: 0</span>
+    <span class="info-item" id="levelInfo">Nivel: 1</span>
+    <span class="info-item" id="miceCounter">🐁: 0</span>
+    <span class="info-item" id="objectsCounter">📦: 0</span> <!-- Nueva línea -->
+    <span class="info-item" id="heartsContainer">❤️ ❤️ ❤️</span>
+    <span class="info-item" id="gameTimer">Tiempo: 0:00</span>
+</div>
             
             <!-- Canvas modificado a 600x600 para un grid cuadrado más limpio -->
             <canvas id="gameCanvas" width="600" height="600"></canvas>
