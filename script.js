@@ -8,16 +8,16 @@ const CELL_SIZE = canvas.width / GRID_SIZE; // 600px / 20 = 30px
 
 // Definición de objetos trampa - TODAS VISIBLES
 const TRAP_OBJECTS = [
-    { emoji: '🔪', name: 'Cuchillo', color: '#FFD700', dangerous: true, shadowColor: '#FF0000' },
-    { emoji: '⛓️', name: 'Cadena', color: '#C0C0C0', dangerous: true, shadowColor: '#808080' },
-    { emoji: '💣', name: 'Bomba', color: '#FF0000', dangerous: true, shadowColor: '#FF4500' },
-    { emoji: '🪚', name: 'Motocierra', color: '#8B4513', dangerous: true, shadowColor: '#D2691E' },
-    { emoji: '🕸️', name: 'Red', color: '#FFFFFF', dangerous: true, shadowColor: '#F0F8FF' },
-    { emoji: '🗡️', name: 'Espada', color: '#6495ED', dangerous: true, shadowColor: '#4169E1' },
-    { emoji: '🧨', name: 'Explosivo', color: '#FF4500', dangerous: true, shadowColor: '#FF6347' },
-    { emoji: '⚔️', name: 'Daga', color: '#B0C4DE', dangerous: true, shadowColor: '#778899' },
-    { emoji: '🔫', name: 'Pistola', color: '#2F4F4F', dangerous: true, shadowColor: '#696969' },
-    { emoji: '🏹', name: 'Arco', color: '#DAA520', dangerous: true, shadowColor: '#B8860B' }
+    { emoji: '🔪', name: 'Cuchillo', color: '#FFD700', dangerous: true, shadowColor: '#FF0000', type: 'knife' },
+    { emoji: '⛓️', name: 'Cadena', color: '#C0C0C0', dangerous: true, shadowColor: '#808080', type: 'chain' },
+    { emoji: '💣', name: 'Bomba', color: '#FF0000', dangerous: true, shadowColor: '#FF4500', type: 'bomb' },
+    { emoji: '🪚', name: 'Motocierra', color: '#8B4513', dangerous: true, shadowColor: '#D2691E', type: 'chainsaw' },
+    { emoji: '🕸️', name: 'Red', color: '#FFFFFF', dangerous: true, shadowColor: '#F0F8FF', type: 'web' },
+    { emoji: '🗡️', name: 'Espada', color: '#6495ED', dangerous: true, shadowColor: '#4169E1', type: 'sword' },
+    { emoji: '🧨', name: 'Explosivo', color: '#FF4500', dangerous: true, shadowColor: '#FF6347', type: 'explosive' },
+    { emoji: '⚔️', name: 'Daga', color: '#B0C4DE', dangerous: true, shadowColor: '#778899', type: 'dagger' },
+    { emoji: '🔫', name: 'Pistola', color: '#2F4F4F', dangerous: true, shadowColor: '#696969', type: 'gun' },
+    { emoji: '🏹', name: 'Arco', color: '#DAA520', dangerous: true, shadowColor: '#B8860B', type: 'bow' }
 ];
 
 // Estado del juego
@@ -101,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadHighScore();
     switchScreen(setupScreen);
     createTrapTimerElement();
+    setupCanvasGradient();
 });
 
 // --- GESTIÓN DE LOCAL STORAGE (High Score) ---
@@ -241,10 +242,9 @@ function main() {
 }
 
 function drawGame() {
-    // Limpiar Canvas
-    ctx.fillStyle = '#1a202c';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    // Fondo con gradiente
+    drawBackground();
+    
     // Dibujar Trampas - ANTES de la comida y serpiente
     drawTraps();
     
@@ -255,9 +255,20 @@ function drawGame() {
     drawSnake();
 }
 
+function drawBackground() {
+    // Gradiente más oscuro para mejor contraste
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0a0a1a');
+    gradient.addColorStop(0.5, '#121230');
+    gradient.addColorStop(1, '#0a0a1a');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
 function drawSnake() {
     snake.forEach((segment, index) => {
         if (index === 0) {
+            // Cabeza de la serpiente con efecto especial
             ctx.fillStyle = snakeColor;
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 2;
@@ -267,9 +278,21 @@ function drawSnake() {
                     CELL_SIZE / 2, 0, 2 * Math.PI);
             ctx.fill();
             ctx.stroke();
+            
+            // Ojos de la serpiente
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(segment.x * CELL_SIZE + CELL_SIZE * 0.7, 
+                   segment.y * CELL_SIZE + CELL_SIZE * 0.3, 
+                   CELL_SIZE * 0.1, 0, Math.PI * 2);
+            ctx.arc(segment.x * CELL_SIZE + CELL_SIZE * 0.7, 
+                   segment.y * CELL_SIZE + CELL_SIZE * 0.7, 
+                   CELL_SIZE * 0.1, 0, Math.PI * 2);
+            ctx.fill();
         } else {
+            // Cuerpo de la serpiente
             ctx.fillStyle = snakeColor;
-            ctx.strokeStyle = '#1a202c';
+            ctx.strokeStyle = darkenColor(snakeColor, 0.3);
             ctx.lineWidth = 1;
             ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
             ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
@@ -278,43 +301,435 @@ function drawSnake() {
 }
 
 function drawFood() {
-    // Dibujar el ratón simple con emoji
-    ctx.font = `${CELL_SIZE}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🐁', 
-        food.x * CELL_SIZE + CELL_SIZE / 2, 
-        food.y * CELL_SIZE + CELL_SIZE / 2);
+    // Dibujar el ratón con sombra y detalle
+    const centerX = food.x * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = food.y * CELL_SIZE + CELL_SIZE / 2;
+    
+    // Sombra del ratón
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    
+    // Cuerpo del ratón (círculo gris)
+    ctx.fillStyle = '#A9A9A9';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, CELL_SIZE * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Orejas
+    ctx.fillStyle = '#808080';
+    ctx.beginPath();
+    ctx.arc(centerX - CELL_SIZE * 0.25, centerY - CELL_SIZE * 0.3, CELL_SIZE * 0.15, 0, Math.PI * 2);
+    ctx.arc(centerX + CELL_SIZE * 0.25, centerY - CELL_SIZE * 0.3, CELL_SIZE * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Cola
+    ctx.strokeStyle = '#696969';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(centerX + CELL_SIZE * 0.3, centerY);
+    ctx.lineTo(centerX + CELL_SIZE * 0.5, centerY + CELL_SIZE * 0.1);
+    ctx.lineTo(centerX + CELL_SIZE * 0.4, centerY);
+    ctx.stroke();
+    
+    // Resetear sombra
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 }
 
 function drawTraps() {
+    const time = Date.now() / 1000; // Para animaciones
+    
     trapObjects.forEach(trap => {
-        // Configurar fuente más grande para mejor visibilidad
-        ctx.font = `${CELL_SIZE + 2}px sans-serif`; // +2px para mejor visibilidad
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        const centerX = trap.x * CELL_SIZE + CELL_SIZE / 2;
+        const centerY = trap.y * CELL_SIZE + CELL_SIZE / 2;
         
-        // Efecto de brillo para las trampas - TODAS VISIBLES
-        ctx.shadowColor = trap.shadowColor || trap.color;
-        ctx.shadowBlur = 10;
-        ctx.fillStyle = trap.color;
-        ctx.fillText(trap.emoji, 
-            trap.x * CELL_SIZE + CELL_SIZE / 2, 
-            trap.y * CELL_SIZE + CELL_SIZE / 2);
+        // Guardar estado del contexto
+        ctx.save();
         
-        // Resetear sombra
-        ctx.shadowBlur = 0;
+        // Aplicar animación de flotar suave
+        const floatOffset = Math.sin(time + trap.x + trap.y) * 2;
+        ctx.translate(0, floatOffset);
         
-        // Dibujar un borde alrededor para mejor visibilidad
-        ctx.strokeStyle = trap.color;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(
-            trap.x * CELL_SIZE, 
-            trap.y * CELL_SIZE, 
-            CELL_SIZE, 
-            CELL_SIZE
-        );
+        // Dibujar según el tipo de trampa con efectos especiales
+        switch(trap.type) {
+            case 'knife':
+                drawKnifeTrap(centerX, centerY, trap);
+                break;
+            case 'bomb':
+                drawBombTrap(centerX, centerY, trap, time);
+                break;
+            case 'chainsaw':
+                drawChainsawTrap(centerX, centerY, trap, time);
+                break;
+            case 'web':
+                drawWebTrap(centerX, centerY, trap);
+                break;
+            case 'sword':
+                drawSwordTrap(centerX, centerY, trap);
+                break;
+            case 'explosive':
+                drawExplosiveTrap(centerX, centerY, trap, time);
+                break;
+            case 'gun':
+                drawGunTrap(centerX, centerY, trap);
+                break;
+            case 'bow':
+                drawBowTrap(centerX, centerY, trap);
+                break;
+            default:
+                drawGenericTrap(centerX, centerY, trap);
+        }
+        
+        // Restaurar estado del contexto
+        ctx.restore();
     });
+}
+
+// Funciones específicas para dibujar diferentes tipos de trampas
+function drawKnifeTrap(x, y, trap) {
+    // Base circular brillante
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, CELL_SIZE * 0.5);
+    gradient.addColorStop(0, '#FFD700');
+    gradient.addColorStop(0.7, '#FF8C00');
+    gradient.addColorStop(1, '#FF4500');
+    
+    // Sombra externa
+    ctx.shadowColor = trap.shadowColor;
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    // Base
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, CELL_SIZE * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Borde
+    ctx.strokeStyle = '#B8860B';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Restablecer sombra
+    ctx.shadowColor = 'transparent';
+    
+    // Emoji del cuchillo
+    ctx.font = `${CELL_SIZE * 0.8}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(trap.emoji, x, y);
+    
+    // Efecto de destello
+    if (Math.sin(Date.now() / 200) > 0.5) {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(x, y, CELL_SIZE * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+function drawBombTrap(x, y, trap, time) {
+    // Base circular con gradiente
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, CELL_SIZE * 0.5);
+    gradient.addColorStop(0, '#FFFFFF');
+    gradient.addColorStop(0.3, trap.color);
+    gradient.addColorStop(1, '#8B0000');
+    
+    // Efecto de parpadeo para bomba
+    const blink = Math.sin(time * 5) > 0 ? 1 : 0.7;
+    
+    ctx.fillStyle = gradient;
+    ctx.globalAlpha = blink;
+    
+    // Círculo exterior
+    ctx.beginPath();
+    ctx.arc(x, y, CELL_SIZE * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Mecha
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + CELL_SIZE * 0.3, y - CELL_SIZE * 0.3);
+    ctx.lineTo(x + CELL_SIZE * 0.4, y - CELL_SIZE * 0.4);
+    ctx.stroke();
+    
+    // Fuego en la mecha
+    if (blink > 0.8) {
+        ctx.fillStyle = '#FF4500';
+        ctx.beginPath();
+        ctx.arc(x + CELL_SIZE * 0.4, y - CELL_SIZE * 0.4, CELL_SIZE * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    ctx.globalAlpha = 1;
+    
+    // Emoji
+    ctx.font = `${CELL_SIZE * 0.7}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(trap.emoji, x, y);
+}
+
+function drawChainsawTrap(x, y, trap, time) {
+    // Base de la motocierra
+    ctx.fillStyle = '#8B4513';
+    ctx.beginPath();
+    ctx.roundRect(x - CELL_SIZE * 0.3, y - CELL_SIZE * 0.2, 
+                  CELL_SIZE * 0.6, CELL_SIZE * 0.4, 5);
+    ctx.fill();
+    
+    // Cadena giratoria
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(time * 2);
+    
+    // Dientes de la cadena
+    ctx.fillStyle = '#C0C0C0';
+    for(let i = 0; i < 8; i++) {
+        const angle = (Math.PI * 2 * i) / 8;
+        const toothX = Math.cos(angle) * CELL_SIZE * 0.25;
+        const toothY = Math.sin(angle) * CELL_SIZE * 0.25;
+        
+        ctx.beginPath();
+        ctx.moveTo(toothX, toothY);
+        ctx.lineTo(toothX + Math.cos(angle) * 8, toothY + Math.sin(angle) * 8);
+        ctx.lineTo(toothX + Math.cos(angle + 0.3) * 5, toothY + Math.sin(angle + 0.3) * 5);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    ctx.restore();
+    
+    // Emoji
+    ctx.font = `${CELL_SIZE * 0.7}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(trap.emoji, x, y);
+}
+
+function drawWebTrap(x, y, trap) {
+    // Telaraña circular
+    ctx.strokeStyle = trap.color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.8;
+    
+    // Círculos concéntricos
+    for(let i = 1; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.arc(x, y, CELL_SIZE * 0.15 * i, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // Radios
+    for(let i = 0; i < 8; i++) {
+        const angle = (Math.PI * 2 * i) / 8;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(angle) * CELL_SIZE * 0.4, 
+                   y + Math.sin(angle) * CELL_SIZE * 0.4);
+        ctx.stroke();
+    }
+    
+    ctx.globalAlpha = 1;
+    
+    // Emoji de araña
+    ctx.font = `${CELL_SIZE * 0.8}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#000000';
+    ctx.fillText('🕷️', x, y);
+}
+
+function drawSwordTrap(x, y, trap) {
+    // Base de la espada
+    ctx.fillStyle = '#4169E1';
+    ctx.beginPath();
+    
+    // Hoja
+    ctx.moveTo(x - CELL_SIZE * 0.1, y - CELL_SIZE * 0.4);
+    ctx.lineTo(x + CELL_SIZE * 0.1, y - CELL_SIZE * 0.4);
+    ctx.lineTo(x + CELL_SIZE * 0.05, y + CELL_SIZE * 0.3);
+    ctx.lineTo(x - CELL_SIZE * 0.05, y + CELL_SIZE * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Empuñadura
+    ctx.fillStyle = '#DAA520';
+    ctx.fillRect(x - CELL_SIZE * 0.05, y + CELL_SIZE * 0.3, 
+                 CELL_SIZE * 0.1, CELL_SIZE * 0.1);
+    
+    // Efecto de brillo en la hoja
+    if (Math.sin(Date.now() / 300) > 0) {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y - CELL_SIZE * 0.35);
+        ctx.lineTo(x, y + CELL_SIZE * 0.25);
+        ctx.stroke();
+    }
+}
+
+function drawExplosiveTrap(x, y, trap, time) {
+    // Base explosiva
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, CELL_SIZE * 0.4);
+    gradient.addColorStop(0, '#FFFFFF');
+    gradient.addColorStop(0.5, trap.color);
+    gradient.addColorStop(1, '#8B0000');
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, CELL_SIZE * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Mecha
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - CELL_SIZE * 0.4);
+    ctx.lineTo(x + CELL_SIZE * 0.2, y - CELL_SIZE * 0.5);
+    ctx.stroke();
+    
+    // Chispas
+    if (Math.random() > 0.7) {
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(x + CELL_SIZE * 0.2 + Math.random() * 4 - 2, 
+                y - CELL_SIZE * 0.5 + Math.random() * 4 - 2, 
+                2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function drawGunTrap(x, y, trap) {
+    // Base del arma
+    ctx.fillStyle = trap.color;
+    
+    // Cañón
+    ctx.fillRect(x - CELL_SIZE * 0.4, y - CELL_SIZE * 0.05, 
+                 CELL_SIZE * 0.8, CELL_SIZE * 0.1);
+    
+    // Gatillo
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(x, y + CELL_SIZE * 0.05, CELL_SIZE * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Mira
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + CELL_SIZE * 0.35, y - CELL_SIZE * 0.02);
+    ctx.lineTo(x + CELL_SIZE * 0.35, y + CELL_SIZE * 0.02);
+    ctx.stroke();
+}
+
+function drawBowTrap(x, y, trap) {
+    // Arco
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, CELL_SIZE * 0.3, Math.PI * 0.2, Math.PI * 0.8);
+    ctx.stroke();
+    
+    // Cuerda
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(Math.PI * 0.2) * CELL_SIZE * 0.3, 
+               y + Math.sin(Math.PI * 0.2) * CELL_SIZE * 0.3);
+    ctx.lineTo(x + Math.cos(Math.PI * 0.8) * CELL_SIZE * 0.3, 
+               y + Math.sin(Math.PI * 0.8) * CELL_SIZE * 0.3);
+    ctx.stroke();
+    
+    // Flecha
+    ctx.fillStyle = '#DAA520';
+    ctx.beginPath();
+    ctx.moveTo(x - CELL_SIZE * 0.25, y);
+    ctx.lineTo(x + CELL_SIZE * 0.25, y);
+    ctx.lineTo(x + CELL_SIZE * 0.2, y - CELL_SIZE * 0.05);
+    ctx.lineTo(x + CELL_SIZE * 0.25, y);
+    ctx.lineTo(x + CELL_SIZE * 0.2, y + CELL_SIZE * 0.05);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawGenericTrap(x, y, trap) {
+    // Base circular con gradiente
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, CELL_SIZE * 0.4);
+    gradient.addColorStop(0, '#FFFFFF');
+    gradient.addColorStop(0.3, trap.color);
+    gradient.addColorStop(1, darkenColor(trap.color, 0.5));
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, CELL_SIZE * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Borde
+    ctx.strokeStyle = darkenColor(trap.color, 0.3);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Emoji
+    ctx.font = `${CELL_SIZE * 0.8}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(trap.emoji, x, y);
+    
+    // Sombra externa
+    ctx.shadowColor = trap.shadowColor;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(x, y, CELL_SIZE * 0.4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowColor = 'transparent';
+}
+
+// Funciones auxiliares para colores
+function darkenColor(hex, lum) {
+    hex = String(hex).replace(/[^0-9a-f]/gi, '');
+    if (hex.length < 6) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    lum = lum || 0;
+    let rgb = "#", c, i;
+    for (i = 0; i < 3; i++) {
+        c = parseInt(hex.substr(i * 2, 2), 16);
+        c = Math.round(Math.min(Math.max(0, c - (c * lum)), 255)).toString(16);
+        rgb += ("00" + c).substr(c.length);
+    }
+    return rgb;
+}
+
+function lightenColor(hex, lum) {
+    hex = String(hex).replace(/[^0-9a-f]/gi, '');
+    if (hex.length < 6) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    lum = lum || 0;
+    let rgb = "#", c, i;
+    for (i = 0; i < 3; i++) {
+        c = parseInt(hex.substr(i * 2, 2), 16);
+        c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
+        rgb += ("00" + c).substr(c.length);
+    }
+    return rgb;
+}
+
+function setupCanvasGradient() {
+    // Crear fondo degradado para mejor contraste
+    canvas.style.background = 'linear-gradient(135deg, #0a0a1a 0%, #121230 50%, #0a0a1a 100%)';
 }
 
 // --- MOVIMIENTO Y LÓGICA DE POSICIÓN ---
@@ -559,17 +974,17 @@ function handleTrapCollision() {
     const trap = checkTrapCollision();
     if (trap) {
         let message = '';
-        switch(trap.emoji) {
-            case '🔪': message = '¡Cortado por un cuchillo!'; break;
-            case '🪚': message = '¡Atrapado en la motocierra!'; break;
-            case '🕸️': message = '¡Atrapado en la red!'; break;
-            case '💣': message = '¡Explotó por una bomba!'; break;
-            case '⛓️': message = '¡Enredado en cadenas!'; break;
-            case '🗡️': message = '¡Empalado por una espada!'; break;
-            case '🧨': message = '¡Explosivo activado!'; break;
-            case '⚔️': message = '¡Herido por una daga!'; break;
-            case '🔫': message = '¡Disparado!'; break;
-            case '🏹': message = '¡Flecha al corazón!'; break;
+        switch(trap.type) {
+            case 'knife': message = '¡Cortado por un cuchillo!'; break;
+            case 'chainsaw': message = '¡Atrapado en la motocierra!'; break;
+            case 'web': message = '¡Atrapado en la red!'; break;
+            case 'bomb': message = '¡Explotó por una bomba!'; break;
+            case 'chain': message = '¡Enredado en cadenas!'; break;
+            case 'sword': message = '¡Empalado por una espada!'; break;
+            case 'explosive': message = '¡Explosivo activado!'; break;
+            case 'dagger': message = '¡Herido por una daga!'; break;
+            case 'gun': message = '¡Disparado!'; break;
+            case 'bow': message = '¡Flecha al corazón!'; break;
             default: message = '¡Trampa activada!';
         }
         showAlert(`${message} -1 vida`, 1500);
@@ -614,7 +1029,7 @@ function updateTrapTimerDisplay() {
     
     if (trapTimerElement && seconds > 0) {
         trapTimerElement.style.display = 'block';
-        trapTimerElement.textContent = `Cambio: ${seconds}s`;
+        trapTimerElement.textContent = `Cambio trampas: ${seconds}s`;
         
         // Cambiar color según el tiempo restante
         if (seconds <= 5) {
@@ -632,20 +1047,86 @@ function updateTrapTimerDisplay() {
 function changeTraps() {
     generateTraps();
     
-    // Mostrar notificación
-    showTrapChangeAlert('¡Las trampas han cambiado de lugar!');
+    // Mostrar notificación con efecto visual
+    showTrapChangeAlert('¡Las trampas han cambiado de lugar! 🔄');
+    
+    // Efecto visual en todas las trampas
+    trapObjects.forEach(trap => {
+        createTrapChangeEffect(trap.x, trap.y, trap.color);
+    });
+}
+
+function createTrapChangeEffect(x, y, color) {
+    // Crear efecto de partículas alrededor de la trampa
+    for (let i = 0; i < 8; i++) {
+        setTimeout(() => {
+            const centerX = x * CELL_SIZE + CELL_SIZE / 2;
+            const centerY = y * CELL_SIZE + CELL_SIZE / 2;
+            const angle = (Math.PI * 2 * i) / 8;
+            
+            const particle = {
+                x: centerX,
+                y: centerY,
+                vx: Math.cos(angle) * 3,
+                vy: Math.sin(angle) * 3,
+                color: color,
+                size: 4,
+                alpha: 1,
+                life: 20
+            };
+            
+            // Dibujar partícula
+            const drawParticle = () => {
+                if (particle.life <= 0) return;
+                
+                ctx.save();
+                ctx.globalAlpha = particle.alpha;
+                ctx.fillStyle = particle.color;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                
+                // Actualizar partícula
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life--;
+                particle.alpha = particle.life / 20;
+                particle.size = Math.max(1, particle.size - 0.1);
+                
+                if (particle.life > 0) {
+                    requestAnimationFrame(drawParticle);
+                }
+            };
+            
+            drawParticle();
+        }, i * 50);
+    }
 }
 
 function showTrapChangeAlert(message) {
     const alertDiv = document.createElement('div');
     alertDiv.className = 'trap-change-alert';
-    alertDiv.textContent = message;
-    $('gameScreen').appendChild(alertDiv);
+    alertDiv.innerHTML = `
+        <div class="alert-content">
+            <span class="alert-icon">⚠️</span>
+            <span>${message}</span>
+        </div>
+    `;
+    document.querySelector('.game-container').appendChild(alertDiv);
+    
+    // Animación de entrada
+    setTimeout(() => {
+        alertDiv.classList.add('show');
+    }, 10);
     
     setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.parentNode.removeChild(alertDiv);
-        }
+        alertDiv.classList.remove('show');
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.parentNode.removeChild(alertDiv);
+            }
+        }, 300);
     }, 2000);
 }
 
@@ -910,3 +1391,19 @@ document.querySelectorAll('.arrow-btn').forEach(btn => {
         }
     });
 });
+
+// Agregar polyfill para roundRect si no está disponible
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        this.beginPath();
+        this.moveTo(x + r, y);
+        this.arcTo(x + w, y, x + w, y + h, r);
+        this.arcTo(x + w, y + h, x, y + h, r);
+        this.arcTo(x, y + h, x, y, r);
+        this.arcTo(x, y, x + w, y, r);
+        this.closePath();
+        return this;
+    };
+}
