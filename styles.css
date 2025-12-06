@@ -1,8 +1,8 @@
 /* Configuración Global y Fuentes */
 :root {
     --bg-color: #1a202c; /* Gris oscuro para el fondo */
-    --primary-color: #48bb78; /* Verde para botones primarios */
-    --secondary-color: #4c51bf; /* Azul/Púrpura para secundario */
+    --primary-color: #279454; /* Verde para botones primarios */
+    --secondary-color: #4148c7; /* Azul/Púrpura para secundario */
     --text-color: #e2e8f0; /* Texto claro */
     --game-bg: #2d3748; /* Fondo del Canvas */
 }
@@ -21,7 +21,7 @@ body {
 
 /* Estructura del Contenedor del Juego */
 .game-container {
-    background-color: #2d3748;
+    background-color: #32476b;
     border-radius: 1.5rem;
     box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
     padding: 2rem;
