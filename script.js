@@ -30,7 +30,6 @@ let lives = 3;
 let level = 1;
 let miceEaten = 0;
 let gameLoopInterval = null;
-let gameSpeedMs = 150; // Velocidad por defecto (Fácil)
 let isPaused = false;
 let playerName = "Jugador 1";
 let snakeColor = '#48BB78'; // Color por defecto (Verde)
@@ -51,12 +50,47 @@ let trapChangeTimer = null;
 let collisionCooldown = false; // Para evitar múltiples colisiones rápidas
 let trapTimerElement = null; // Referencia al elemento del temporizador
 
+// Sistema de dificultad
+let gameSpeedMs = 150; // Velocidad inicial
+let currentDifficulty = 'easy';
+
 // Mapeo de colores
 const COLOR_MAP = {
     green: '#48BB78',
     blue: '#4C51BF',
     red: '#E53E3E',
     purple: '#9F7AEA'
+};
+
+// Sistema de dificultad actualizado
+const DIFFICULTY_SETTINGS = {
+    easy: { 
+        speed: 150,  // 150ms entre movimientos - MÁS LENTO
+        obstacleCount: 4, 
+        powerupChance: 0.3, 
+        growthRate: 1, 
+        enemyCount: 0,
+        mouseSpeed: 1,
+        mouseAgility: 0.5
+    },
+    normal: { 
+        speed: 120,  // 120ms entre movimientos
+        obstacleCount: 5, 
+        powerupChance: 0.2, 
+        growthRate: 2, 
+        enemyCount: 0,
+        mouseSpeed: 1.5,
+        mouseAgility: 0.6
+    },
+    hard: { 
+        speed: 90,   // 90ms entre movimientos - MÁS RÁPIDO
+        obstacleCount: 6, 
+        powerupChance: 0.1, 
+        growthRate: 3, 
+        enemyCount: 0,
+        mouseSpeed: 2,
+        mouseAgility: 0.7
+    }
 };
 
 // Direcciones posibles para el ratón
@@ -102,7 +136,33 @@ document.addEventListener('DOMContentLoaded', () => {
     switchScreen(setupScreen);
     createTrapTimerElement();
     setupCanvasGradient();
+    setupDifficultyButtons();
 });
+
+// Configurar botones de dificultad
+function setupDifficultyButtons() {
+    document.querySelectorAll('.difficulty-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.difficulty-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            currentDifficulty = btn.getAttribute('data-diff');
+            gameSpeedMs = DIFFICULTY_SETTINGS[currentDifficulty].speed;
+            
+            // Actualizar la descripción de la dificultad
+            const desc = document.getElementById('difficultyDescription');
+            const descriptions = {
+                easy: 'Velocidad lenta, menos trampas, ideal para principiantes',
+                normal: 'Velocidad moderada, trampas equilibradas, desafío estándar',
+                hard: 'Velocidad rápida, más trampas, para expertos'
+            };
+            
+            if (desc) {
+                desc.textContent = descriptions[currentDifficulty] || 'Selecciona una dificultad';
+            }
+        });
+    });
+}
 
 // --- GESTIÓN DE LOCAL STORAGE (High Score) ---
 function loadHighScore() {
@@ -126,30 +186,6 @@ document.querySelectorAll('.snake-option').forEach(option => {
         document.querySelectorAll('.snake-option').forEach(o => o.classList.remove('selected'));
         option.classList.add('selected');
         snakeColor = COLOR_MAP[option.getAttribute('data-snake')];
-    });
-});
-
-document.querySelectorAll('.difficulty-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.difficulty-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        gameSpeedMs = parseInt(btn.getAttribute('data-diff'));
-        
-        // Ajustar velocidad del ratón según dificultad
-        switch(gameSpeedMs) {
-            case 150: // Fácil
-                mouseSpeed = 1;
-                mouseAgility = 0.5;
-                break;
-            case 100: // Normal
-                mouseSpeed = 1.5;
-                mouseAgility = 0.6;
-                break;
-            case 70: // Difícil
-                mouseSpeed = 2;
-                mouseAgility = 0.7;
-                break;
-        }
     });
 });
 
@@ -181,11 +217,18 @@ function initGame() {
     mouseMoveCounter = 0;
     mouseDirection = MOUSE_DIRECTIONS[Math.floor(Math.random() * 4)]; // Dirección aleatoria inicial
     
+    // Configurar parámetros según dificultad
+    const settings = DIFFICULTY_SETTINGS[currentDifficulty];
+    gameSpeedMs = settings.speed;
+    mouseSpeed = settings.mouseSpeed;
+    mouseAgility = settings.mouseAgility;
+    
     // Reiniciar variables de objetos trampa
     trapObjects = [];
     lastTrapChange = Date.now();
     collisionCooldown = false;
 
+    // Limpiar intervalos si existen
     if (gameLoopInterval) clearInterval(gameLoopInterval);
     if (timerInterval) clearInterval(timerInterval);
     if (trapChangeTimer) clearInterval(trapChangeTimer);
@@ -199,6 +242,7 @@ function initGame() {
 function startGame() {
     initGame();
     
+    // Iniciar el loop de juego con la velocidad correcta
     gameLoopInterval = setInterval(main, gameSpeedMs);
     timerInterval = setInterval(updateTimer, 1000);
     document.addEventListener('keydown', changeDirection);
@@ -230,14 +274,22 @@ function main() {
     }
 
     // 5. Comprobar si come la comida
-    if (checkFoodEaten()) {
-        handleFoodEaten();
+    const ateFood = checkFoodEaten();
+    
+    // 6. Solo si NO comió comida, hacer pop()
+    if (!ateFood && !growSnake) {
+        snake.pop();
+    }
+    
+    // 7. Resetear growSnake si estaba creciendo
+    if (growSnake) {
+        growSnake = false;
     }
 
-    // 6. Actualizar temporizador de trampas
+    // 8. Actualizar temporizador de trampas
     updateTrapTimerDisplay();
 
-    // 7. Dibujar
+    // 9. Dibujar
     drawGame();
 }
 
@@ -737,11 +789,7 @@ function moveSnake() {
     const head = { x: snake[0].x + dx, y: snake[0].y + dy };
     snake.unshift(head);
     
-    if (!growSnake) {
-        snake.pop();
-    } else {
-        growSnake = false;
-    }
+    // El pop() se maneja en la función main ahora
 }
 
 function moveMouse() {
@@ -866,8 +914,9 @@ function isSnake(pos) {
 // --- SISTEMA DE TRAMPAS ---
 function generateTraps() {
     trapObjects = [];
-    // 4-5 trampas distribuidas estratégicamente
-    const trapCount = 4 + Math.floor(level / 5);
+    // Diferente cantidad de trampas según dificultad
+    const baseCount = DIFFICULTY_SETTINGS[currentDifficulty].obstacleCount;
+    const trapCount = baseCount + Math.floor(level / 5);
     
     // Posiciones estratégicas en diferentes zonas del mapa
     const strategicZones = [
@@ -1219,8 +1268,11 @@ function handleFoodEaten() {
 function levelUp() {
     level++;
     
-    if (gameSpeedMs > 70) {
-        gameSpeedMs = Math.max(70, gameSpeedMs - 5);
+    // Aumentar ligeramente la velocidad con cada nivel, pero con límites
+    if (gameSpeedMs > 50) { // Velocidad mínima de 50ms
+        gameSpeedMs = Math.max(50, gameSpeedMs - 5);
+        
+        // Reiniciar el intervalo con la nueva velocidad
         clearInterval(gameLoopInterval);
         gameLoopInterval = setInterval(main, gameSpeedMs);
     }
@@ -1303,6 +1355,7 @@ function gameOver() {
         <p>Nivel Alcanzado: ${level}</p>
         <p>Ratones Comidos: ${miceEaten}</p>
         <p>Tiempo Jugado: ${formatTime(timeElapsed)}</p>
+        <p>Dificultad: ${currentDifficulty === 'easy' ? 'Fácil' : currentDifficulty === 'normal' ? 'Normal' : 'Difícil'}</p>
     `;
     
     switchScreen(gameOverScreen);

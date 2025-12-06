@@ -12,25 +12,29 @@
 <body>
     <div class="game-container">
 
-
-<!-- Agrega esto dentro del div.game-container, después del canvas -->
-
-<div id="staticObjects" class="static-objects"></div>
+        <!-- Elemento para objetos estáticos -->
+        <div id="staticObjects" class="static-objects"></div>
 
         <!-- Pantalla de Configuración -->
         <div id="setupScreen" class="screen active">
-            <h1 class="text-3xl md:text-5xl font-bold mb-4">🐍 SNAKE JINX 🐍</h1>
-            <p class="mb-4">Tu mejor puntuación: <span id="highScoreDisplay" class="font-bold text-xl">0</span></p>
+            <!-- TÍTULO SIMPLIFICADO (Opción 1) -->
+            <div class="game-title mb-6">
+                <span class="snake-left">🐍</span>
+                <span class="title-text">SNAKE JINX</span>
+                <span class="snake-right">🐍</span>
+            </div>
+            
+            <p class="mb-6 text-xl">Tu mejor puntuación: <span id="highScoreDisplay" class="font-bold text-2xl text-yellow-400">0</span></p>
 
-            <div class="setup-options w-full max-w-sm">
-                <div class="flex flex-col items-center">
-                    <label for="playerName" class="mb-2">Nombre del Jugador:</label>
-                    <input type="text" id="playerName" class="name-input w-full" placeholder="Tu nombre">
-                    <div id="nameAlert" class="text-red-400 mt-2 hidden">¡Por favor escribe tu nombre!</div>
+            <div class="setup-options w-full max-w-md">
+                <div class="flex flex-col items-center mb-6">
+                    <label for="playerName" class="mb-2 text-lg font-semibold">Nombre del Jugador:</label>
+                    <input type="text" id="playerName" class="name-input w-full" placeholder="Tu nombre" autocomplete="off">
+                    <div id="nameAlert" class="text-red-400 mt-2 hidden text-sm">¡Por favor escribe tu nombre!</div>
                 </div>
 
-                <div class="flex flex-col items-center">
-                    <h3 class="text-xl mb-2">Selecciona tu Serpiente</h3>
+                <div class="flex flex-col items-center mb-6">
+                    <h3 class="text-xl mb-3 font-bold">Selecciona tu Serpiente</h3>
                     <div class="snake-selection">
                         <div class="snake-option selected" data-snake="green">
                             <div class="snake-preview-container">
@@ -38,7 +42,7 @@
                                 <div class="snake-body-preview" style="background-color: #48BB78;"></div>
                                 <div class="snake-body-preview" style="background-color: #48BB78;"></div>
                             </div>
-                            <p>Verde</p>
+                            <p class="mt-2 font-medium">Verde</p>
                         </div>
                         <div class="snake-option" data-snake="blue">
                             <div class="snake-preview-container">
@@ -46,7 +50,7 @@
                                 <div class="snake-body-preview" style="background-color: #4C51BF;"></div>
                                 <div class="snake-body-preview" style="background-color: #4C51BF;"></div>
                             </div>
-                            <p>Azul</p>
+                            <p class="mt-2 font-medium">Azul</p>
                         </div>
                         <div class="snake-option" data-snake="red">
                             <div class="snake-preview-container">
@@ -54,7 +58,7 @@
                                 <div class="snake-body-preview" style="background-color: #E53E3E;"></div>
                                 <div class="snake-body-preview" style="background-color: #E53E3E;"></div>
                             </div>
-                            <p>Roja</p>
+                            <p class="mt-2 font-medium">Roja</p>
                         </div>
                         <div class="snake-option" data-snake="purple">
                             <div class="snake-preview-container">
@@ -62,88 +66,177 @@
                                 <div class="snake-body-preview" style="background-color: #9F7AEA;"></div>
                                 <div class="snake-body-preview" style="background-color: #9F7AEA;"></div>
                             </div>
-                            <p>Morada</p>
+                            <p class="mt-2 font-medium">Morada</p>
                         </div>
                     </div>
                 </div>
                 
-                <div class="flex flex-col items-center">
-                    <h3 class="text-xl mb-2">Selecciona la Dificultad</h3>
+                <div class="flex flex-col items-center mb-8">
+                    <h3 class="text-xl mb-3 font-bold">Selecciona la Dificultad</h3>
                     <div class="difficulty-selection">
-                        <button class="difficulty-btn active" data-diff="150">Fácil</button>
-                        <button class="difficulty-btn" data-diff="100">Normal</button>
-                        <button class="difficulty-btn" data-diff="70">Difícil</button>
+                        <button class="difficulty-btn active" data-diff="easy">Fácil</button>
+                        <button class="difficulty-btn" data-diff="normal">Normal</button>
+                        <button class="difficulty-btn" data-diff="hard">Difícil</button>
                     </div>
+                    <p id="difficultyDescription" class="mt-2 text-sm text-gray-300 text-center">
+                        Velocidad moderada, menos obstáculos
+                    </p>
                 </div>
                 
-                <button id="startGameBtn" class="button primary-btn mt-4 w-full">Comenzar Juego</button>
+                <button id="startGameBtn" class="button primary-btn mt-2 w-full py-3 text-lg font-bold">
+                    🎮 Comenzar Juego
+                </button>
             </div>
         </div>
 
         <!-- Pantalla del Juego -->
         <div id="gameScreen" class="screen">
-            <!-- En el div.info-panel dentro de #gameScreen -->
-<div class="info-panel">
-    <span class="info-item" id="playerInfo">Jugador:</span>
-    <span class="info-item" id="score">Puntuación: 0</span>
-    <span class="info-item" id="levelInfo">Nivel: 1</span>
-    <span class="info-item" id="miceCounter">🐁: 0</span>
-    <span class="info-item" id="objectsCounter">📦: 0</span> <!-- Nueva línea -->
-    <span class="info-item" id="heartsContainer">❤️ ❤️ ❤️</span>
-    <span class="info-item" id="gameTimer">Tiempo: 0:00</span>
-</div>
-            
-            <!-- Canvas modificado a 600x600 para un grid cuadrado más limpio -->
-            <canvas id="gameCanvas" width="600" height="600"></canvas>
-            
-            <div class="button-group">
-                <button id="pauseBtn" class="button secondary-btn">⏸️ Pausa</button>
-                <button id="menuBtn" class="button secondary-btn">Menú Principal</button>
+            <!-- Panel de información mejorado -->
+            <div class="info-panel">
+                <span class="info-item" id="playerInfo">Jugador:</span>
+                <span class="info-item" id="score">Puntuación: 0</span>
+                <span class="info-item" id="levelInfo">Nivel: 1</span>
+                <span class="info-item" id="miceCounter">🐁: 0</span>
+                <span class="info-item" id="objectsCounter">📦: 0</span>
+                <div id="activeEffects" class="active-effects"></div>
+                <span class="info-item" id="heartsContainer">❤️ ❤️ ❤️</span>
+                <span class="info-item" id="gameTimer">⏱️ 0:00</span>
             </div>
             
-            <!-- Controles Móviles -->
+            <!-- Canvas con mejoras visuales -->
+            <div class="canvas-container relative">
+                <canvas id="gameCanvas" width="600" height="600"></canvas>
+                <!-- Timer de obstáculos -->
+                <div id="obstacleTimer" class="obstacle-timer hidden"></div>
+            </div>
+            
+            <div class="button-group mt-4">
+                <button id="pauseBtn" class="button secondary-btn">⏸️ Pausa</button>
+                <button id="menuBtn" class="button secondary-btn">🏠 Menú Principal</button>
+            </div>
+            
+            <!-- Controles Móviles mejorados -->
             <div id="mobileControls" class="mobile-controls">
                 <div class="mobile-grid">
-                    <button id="upBtn" class="arrow-btn" data-dir="up">▲</button>
-                    <button id="downBtn" class="arrow-btn" data-dir="down">▼</button>
-                    <button id="leftBtn" class="arrow-btn" data-dir="left">◀</button>
-                    <button id="rightBtn" class="arrow-btn" data-dir="right">▶</button>
+                    <button id="upBtn" class="arrow-btn" data-dir="up">
+                        <span class="arrow-icon">▲</span>
+                    </button>
+                    <button id="downBtn" class="arrow-btn" data-dir="down">
+                        <span class="arrow-icon">▼</span>
+                    </button>
+                    <button id="leftBtn" class="arrow-btn" data-dir="left">
+                        <span class="arrow-icon">◀</span>
+                    </button>
+                    <button id="rightBtn" class="arrow-btn" data-dir="right">
+                        <span class="arrow-icon">▶</span>
+                    </button>
+                </div>
+                <div class="action-buttons mt-4 flex justify-center gap-4">
+                    <button id="actionBtn" class="button primary-btn py-2 px-4">Acción</button>
                 </div>
             </div>
         </div>
         
-        <!-- Pantalla de Fin de Juego -->
-     <div id="gameOver" class="screen">
-            <h2 class="text-3xl font-bold mb-2 text-red-400">¡FIN DEL JUEGO!</h2>
-            <p id="finalScore" class="text-2xl mb-4"></p>
-            <p id="newRecord" class="text-yellow-400 font-bold text-xl hidden">¡NUEVO RÉCORD PERSONAL! 🏆</p>
-            
-            <h3 class="text-xl font-bold mt-4 mb-2">Estadísticas Finales</h3>
-            <p id="finalStats"></p>
+        <!-- Pantalla de Fin de Juego mejorada -->
+        <div id="gameOver" class="screen">
+            <div class="game-over-content">
+                <h2 class="text-4xl font-bold mb-4 text-red-400 animate-pulse">¡FIN DEL JUEGO!</h2>
+                <p id="finalScore" class="text-2xl mb-6"></p>
+                <p id="newRecord" class="text-yellow-400 font-bold text-xl mb-4 hidden">
+                    🏆 ¡NUEVO RÉCORD PERSONAL!
+                </p>
+                
+                <div class="stats-container bg-gray-800 bg-opacity-50 p-6 rounded-xl mb-6">
+                    <h3 class="text-xl font-bold mb-4 text-center">🏅 Estadísticas Finales</h3>
+                    <div id="finalStats" class="text-left space-y-2"></div>
+                </div>
 
-            <div class="button-group mt-6">
-                <button id="restartBtn" class="button primary-btn">Volver a Jugar</button>
-                <button id="backToSetupBtn" class="button secondary-btn">Menú Principal</button>
+                <div class="achievements-container mb-6 hidden">
+                    <h4 class="text-lg font-bold mb-2">🎖️ Logros Desbloqueados</h4>
+                    <ul id="achievementList" class="text-sm space-y-1"></ul>
+                </div>
+
+                <div class="button-group">
+                    <button id="restartBtn" class="button primary-btn px-8 py-3">🔄 Volver a Jugar</button>
+                    <button id="backToSetupBtn" class="button secondary-btn px-8 py-3">🏠 Menú Principal</button>
+                </div>
             </div>
         </div>
 
-        <!-- Panel de Pausa -->
+        <!-- Panel de Pausa mejorado -->
         <div id="pausePanel" class="screen" style="display: none;">
-            <h2 class="text-3xl font-bold mb-4">Juego en Pausa</h2>
-            <div class="button-group">
-                <button id="resumeBtn" class="button primary-btn">▶️ Reanudar</button>
-                <button id="menuFromPauseBtn" class="button secondary-btn">Menú Principal</button>
+            <div class="pause-content bg-gray-800 bg-opacity-90 p-8 rounded-2xl">
+                <h2 class="text-4xl font-bold mb-6 text-yellow-400">⏸️ Juego en Pausa</h2>
+                <div class="current-stats mb-6 space-y-3">
+                    <p class="text-lg">Puntuación: <span id="pauseScore" class="font-bold">0</span></p>
+                    <p class="text-lg">Nivel: <span id="pauseLevel" class="font-bold">1</span></p>
+                    <p class="text-lg">Vidas: <span id="pauseLives" class="font-bold">3</span></p>
+                </div>
+                <div class="button-group">
+                    <button id="resumeBtn" class="button primary-btn px-8 py-3">▶️ Reanudar</button>
+                    <button id="menuFromPauseBtn" class="button secondary-btn px-8 py-3">🏠 Menú Principal</button>
+                </div>
             </div>
         </div>
 
-        <!-- Pantalla de Logro Legendario -->
+        <!-- Pantalla de Logro Legendario mejorada -->
         <div id="legendaryScreen" class="screen" style="display: none;">
-            <h2 class="text-3xl font-bold mb-4">¡Logro Legendario! 🏆</h2>
-            <p class="text-xl mb-4">¡Increíble, <span id="legendaryPlayerName"></span>!</p>
-            <p>Has alcanzado un hito legendario en el juego. ¡Eres imparable!</p>
+            <div class="legendary-content bg-gradient-to-br from-yellow-600 via-orange-500 to-red-600 p-10 rounded-3xl shadow-2xl">
+                <div class="crown-icon text-6xl mb-4 animate-bounce">👑</div>
+                <h2 class="text-4xl font-bold mb-4 text-white">¡LOGRO LEGENDARIO! 🏆</h2>
+                <p class="text-2xl mb-6 text-white">¡INCREÍBLE, <span id="legendaryPlayerName" class="font-bold"></span>!</p>
+                <p class="text-xl mb-8 text-yellow-100">Has alcanzado un hito legendario en el juego. ¡Eres imparable!</p>
+                <div class="fireworks-container mb-6"></div>
+                <button id="closeLegendaryBtn" class="button primary-btn px-8 py-3">🎮 Continuar Juego</button>
+            </div>
         </div>
     </div>
 
+    <!-- Alertas flotantes -->
+    <div id="gameAlert" class="game-alert hidden"></div>
+
     <script src="script.js"></script>
+    
+    <!-- Script adicional para corregir problemas -->
+    <script>
+    // Script de corrección para evitar problemas de inicialización
+    document.addEventListener('DOMContentLoaded', function() {
+        // Asegurar que las variables globales estén definidas
+        if (typeof legendaryAchieved === 'undefined') {
+            window.legendaryAchieved = false;
+        }
+        
+        if (typeof gameRunning === 'undefined') {
+            window.gameRunning = false;
+        }
+        
+        if (typeof maxSnakeLength === 'undefined') {
+            window.maxSnakeLength = 3;
+        }
+        
+        if (typeof score === 'undefined') {
+            window.score = 0;
+        }
+        
+        if (typeof lives === 'undefined') {
+            window.lives = 3;
+        }
+        
+        // Corregir el botón de cierre de pantalla legendaria
+        const closeLegendaryBtn = document.getElementById('closeLegendaryBtn');
+        if (closeLegendaryBtn) {
+            closeLegendaryBtn.addEventListener('click', function() {
+                const legendaryScreen = document.getElementById('legendaryScreen');
+                if (legendaryScreen) {
+                    legendaryScreen.style.display = 'none';
+                }
+                // Reanudar el juego si estaba pausado
+                if (typeof resumeGame === 'function' && typeof isPaused !== 'undefined' && isPaused) {
+                    resumeGame();
+                }
+            });
+        }
+    });
+    </script>
 </body>
 </html>
