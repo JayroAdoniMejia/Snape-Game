@@ -203,19 +203,20 @@ $('startGameBtn').addEventListener('click', () => {
 
 // --- LÓGICA DE INICIO Y RESETEO ---
 function initGame() {
+    // REINICIAR SERPIENTE - SOLO 3 SEGMENTOS (PEQUEÑA)
     snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
     dx = 1; 
     dy = 0;
     score = 0;
     lives = 3;
     level = 1;
-    miceEaten = 0;
+    miceEaten = 0;  // RESET CONTADOR DE RATONES
     timeElapsed = 0;
     isPaused = false;
     lastDirection = 'right';
-    growSnake = false;
+    growSnake = false;  // Asegurar que no esté creciendo
     mouseMoveCounter = 0;
-    mouseDirection = MOUSE_DIRECTIONS[Math.floor(Math.random() * 4)]; // Dirección aleatoria inicial
+    mouseDirection = MOUSE_DIRECTIONS[Math.floor(Math.random() * 4)];
     
     // Configurar parámetros según dificultad
     const settings = DIFFICULTY_SETTINGS[currentDifficulty];
@@ -236,7 +237,7 @@ function initGame() {
     placeFood();
     generateTraps();
     startTrapChangeTimer();
-    updateUI();
+    updateUI();  // Esto actualizará el contador de ratones a 0
 }
 
 function startGame() {
@@ -257,33 +258,36 @@ function startGame() {
 function main() {
     if (isPaused) return;
 
-    // 1. Mover la serpiente
+    // 1. Comprobar si come la comida - HACER ESTO PRIMERO
+    const ateFood = checkFoodEaten();
+    if (ateFood) {
+        handleFoodEaten();
+    }
+
+    // 2. Mover la serpiente
     moveSnake();
 
-    // 2. Mover el ratón (más frecuente)
+    // 3. Mover el ratón (más frecuente)
     moveMouse();
 
-    // 3. Comprobar colisiones con paredes y serpiente
+    // 4. Solo hacer pop() si NO comió comida y no está creciendo
+    if (!ateFood && !growSnake) {
+        snake.pop();
+    }
+
+    // 5. Resetear growSnake si estaba creciendo
+    if (growSnake) {
+        growSnake = false;
+    }
+
+    // 6. Comprobar colisiones con paredes y serpiente
     if (checkWallCollision() || checkSelfCollision()) {
         handleCollision();
     }
 
-    // 4. Comprobar colisión con trampas
+    // 7. Comprobar colisión con trampas (solo si no hay cooldown)
     if (!collisionCooldown && checkTrapCollision()) {
         handleTrapCollision();
-    }
-
-    // 5. Comprobar si come la comida
-    const ateFood = checkFoodEaten();
-    
-    // 6. Solo si NO comió comida, hacer pop()
-    if (!ateFood && !growSnake) {
-        snake.pop();
-    }
-    
-    // 7. Resetear growSnake si estaba creciendo
-    if (growSnake) {
-        growSnake = false;
     }
 
     // 8. Actualizar temporizador de trampas
@@ -788,8 +792,7 @@ function setupCanvasGradient() {
 function moveSnake() {
     const head = { x: snake[0].x + dx, y: snake[0].y + dy };
     snake.unshift(head);
-    
-    // El pop() se maneja en la función main ahora
+    // NO HACER pop() aquí - se maneja en main() dependiendo de si comió o no
 }
 
 function moveMouse() {
@@ -1245,24 +1248,35 @@ function handleCollision() {
 
 function checkFoodEaten() {
     const head = snake[0];
-    return head.x === food.x && head.y === food.y;
+    if (head.x === food.x && head.y === food.y) {
+        return true;
+    }
+    return false;
 }
 
 function handleFoodEaten() {
+    console.log("¡Ratón comido!"); // Para debug
     score += 10;
-    miceEaten++;
-    growSnake = true;
+    miceEaten++;  // INCREMENTAR CONTADOR DE RATONES
     
     // Aumentar un poco la velocidad del ratón cada vez que comes uno
     mouseSpeed = Math.min(3, mouseSpeed + 0.1);
     
+    // Colocar nuevo ratón
     placeFood();
     
+    // NO HACER pop() aquí - la serpiente crece naturalmente porque no hacemos pop() cuando come
+    // La serpiente ya tiene un segmento extra porque no hicimos pop() en main()
+    
+    // Marcar que la serpiente debe crecer
+    growSnake = true;
+    
+    // Comprobar si sube de nivel (cada 5 ratones)
     if (miceEaten % 5 === 0) {
         levelUp();
     }
 
-    updateUI();
+    updateUI(); // Esto actualizará el contador en pantalla
 }
 
 function levelUp() {
@@ -1289,7 +1303,7 @@ function updateUI() {
     $('playerInfo').textContent = `Jugador: ${playerName}`;
     $('score').textContent = `Puntuación: ${score}`;
     $('levelInfo').textContent = `Nivel: ${level}`;
-    $('miceCounter').textContent = `🐁: ${miceEaten}`;
+    $('miceCounter').textContent = `🐁: ${miceEaten}`; // Esto actualiza el contador visible
     
     let heartsHtml = '';
     for (let i = 0; i < 5; i++) {
